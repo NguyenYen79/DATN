@@ -7,3 +7,9 @@ B3: chạy lệnh:
     - sudo systemctl stop fanco.service     : dừng dịch vụ ngầm
 
 Lệnh check sụt ap: vcgencmd get_throttled
+
+
+
+- Stage changed all files:          git add .
+- Commit changes:                   git commit -m "Describe what you changed"
+- Push to GitHub:                   git push origin main
