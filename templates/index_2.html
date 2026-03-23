@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>FanCo AI - Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .glass { background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.1); }
+        .fan-spin { animation: spin 2s linear infinite; }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4 bg-slate-900 text-white">
+
+    <div id="screen-modes" class="w-full max-w-5xl block">
+        <div class="flex items-center justify-between mb-12">
+            <a href="{{ url_for('logout') }}" class="text-slate-400 hover:text-white transition flex items-center gap-2 bg-slate-800/50 px-4 py-2 rounded-xl">
+                <i class="fas fa-arrow-left"></i> Đăng xuất
+            </a>
+            <h2 class="text-2xl font-bold text-blue-400 font-mono tracking-widest uppercase">Select Operation Mode</h2>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-8 text-center">
+            <div onclick="goMonitor('Manual')" class="glass p-12 rounded-[3rem] hover:bg-blue-500/10 cursor-pointer border-t-8 border-blue-500 group transition-all">
+                <i class="fas fa-sliders-h text-5xl mb-6 text-blue-400"></i>
+                <h3 class="font-bold text-2xl">MANUAL</h3>
+                <p class="text-slate-400 text-sm mt-3">Điều khiển thủ công</p>
+            </div>
+            <div onclick="openEcoPopup()" class="glass p-12 rounded-[3rem] hover:bg-green-500/10 cursor-pointer border-t-8 border-green-500 group transition-all">
+                <i class="fas fa-leaf text-5xl mb-6 text-green-400"></i>
+                <h3 class="font-bold text-2xl">ECO</h3>
+                <p class="text-slate-400 text-sm mt-3">Hẹn giờ AM/PM</p>
+            </div>
+            <div onclick="goMonitor('Smart')" class="glass p-12 rounded-[3rem] hover:bg-purple-500/10 cursor-pointer border-t-8 border-purple-500 group transition-all">
+                <i class="fas fa-robot text-5xl mb-6 text-purple-400"></i>
+                <h3 class="font-bold text-2xl">SMART</h3>
+                <p class="text-slate-400 text-sm mt-3">Tự động bằng AI</p>
+            </div>
+        </div>
+    </div>
+
+    <div id="screen-monitor" class="hidden w-full max-w-6xl">
+        <div class="flex justify-between items-center mb-8">
+            <button onclick="goBack('modes')" class="bg-slate-800/80 hover:bg-slate-700 px-6 py-2.5 rounded-2xl flex items-center gap-3 transition">
+                <i class="fas fa-chevron-left"></i> Quay lại menu
+            </button>
+            <div id="current-mode-tag" class="px-6 py-2 rounded-full font-black text-xs uppercase tracking-widest shadow-lg bg-blue-600">---</div>
+        </div>
+
+        <div class="grid grid-cols-12 gap-8">
+            <div class="col-span-12 lg:col-span-5 space-y-6">
+                <div class="glass p-10 rounded-[2.5rem] text-center flex flex-col items-center">
+                    <div class="w-28 h-28 bg-blue-500/10 rounded-full flex items-center justify-center mb-6 shadow-2xl">
+                        <i class="fas fa-fan text-5xl text-blue-500 fan-spin" id="icon-fan"></i>
+                    </div>
+                    <span class="text-slate-500 text-[10px] font-bold uppercase tracking-widest">Speed Control</span>
+                    <h2 class="text-7xl font-black mt-2 tracking-tighter" id="val-speed">0%</h2>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="glass p-6 rounded-[2rem]">
+                        <p class="text-[10px] text-slate-500 uppercase font-bold mb-1">Số lượng người</p>
+                        <h4 class="text-3xl font-bold" id="val-people">--</h4>
+                    </div>
+                    <div class="glass p-6 rounded-[2rem]">
+                        <p class="text-[10px] text-slate-500 uppercase font-bold mb-1">Năng lượng</p>
+                        <h4 class="text-3xl font-bold text-yellow-400">0.95 <small class="text-xs">kWh</small></h4>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-span-12 lg:col-span-7">
+                <div class="glass rounded-[2.5rem] h-full min-h-[450px] relative overflow-hidden flex flex-col border border-white/5">
+                    <div class="absolute top-5 right-5 z-40 bg-black/60 px-4 py-2 rounded-xl backdrop-blur-md border border-white/10 font-mono text-center">
+                        <p id="cam-clock" class="text-xl font-bold text-green-400 tracking-tighter">00:00:00</p>
+                        <p id="cam-date" class="text-[8px] text-slate-400 uppercase tracking-widest">Oct 24, 2024</p>
+                    </div>
+
+                    <div id="cam-blind" class="absolute inset-0 bg-slate-900/95 z-30 hidden flex flex-col items-center justify-center">
+                        <i class="fas fa-video-slash text-6xl text-slate-800 mb-4"></i>
+                        <p class="text-slate-500 text-sm font-medium">CAMERA DISABLED IN THIS MODE</p>
+                    </div>
+
+                    <div class="p-5 border-b border-white/5 flex justify-between items-center bg-slate-900/40 z-40">
+                        <span class="text-[10px] font-bold tracking-[0.2em] uppercase opacity-50">Live Surveillance Feed</span>
+                        <span id="cam-status" class="text-[10px] font-bold text-green-400 animate-pulse">● LIVE</span>
+                    </div>
+                    
+                    <div class="flex-1 bg-black flex items-center justify-center overflow-hidden">
+                        <img src="{{ url_for('video_feed') }}" class="w-full h-full object-contain">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="eco-pop" class="hidden fixed inset-0 bg-black/95 flex items-center justify-center z-50 p-6">
+        <div class="glass p-10 rounded-[3rem] w-full max-w-md text-center border border-green-500/20">
+            <h3 class="font-bold text-2xl mb-8 text-green-500">SET ECO SCHEDULE</h3>
+            <div class="space-y-6">
+                <div class="text-left bg-slate-800/50 p-5 rounded-[2rem]">
+                    <label class="text-[10px] uppercase font-bold text-slate-500 ml-2">Giờ bắt đầu</label>
+                    <div class="flex gap-2 mt-2">
+                        <select id="s-h" class="flex-1 bg-slate-900 p-3 rounded-xl outline-none border border-slate-700 text-lg"></select>
+                        <select id="s-m" class="flex-1 bg-slate-900 p-3 rounded-xl outline-none border border-slate-700 text-lg">
+                            <option>00</option><option>15</option><option>30</option><option>45</option>
+                        </select>
+                        <select id="s-ap" class="w-24 bg-green-600 p-3 rounded-xl font-bold">
+                            <option>AM</option><option>PM</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="text-left bg-slate-800/50 p-5 rounded-[2rem]">
+                    <label class="text-[10px] uppercase font-bold text-slate-500 ml-2">Giờ kết thúc</label>
+                    <div class="flex gap-2 mt-2">
+                        <select id="e-h" class="flex-1 bg-slate-900 p-3 rounded-xl outline-none border border-slate-700 text-lg"></select>
+                        <select id="e-m" class="flex-1 bg-slate-900 p-3 rounded-xl outline-none border border-slate-700 text-lg">
+                            <option>00</option><option>15</option><option>30</option><option>45</option>
+                        </select>
+                        <select id="e-ap" class="w-24 bg-green-600 p-3 rounded-xl font-bold">
+                            <option>AM</option><option>PM</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="pt-4 space-y-3">
+                    <button onclick="goMonitor('Eco')" class="w-full bg-green-600 hover:bg-green-500 p-4 rounded-2xl font-bold text-lg transition-all shadow-lg shadow-green-900/40">ACTIVATE ECO</button>
+                    <button onclick="document.getElementById('eco-pop').classList.add('hidden')" class="w-full text-slate-500 text-sm">Hủy bỏ</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function updateClock() {
+            const now = new Date();
+            document.getElementById('cam-clock').innerText = now.toLocaleTimeString('en-US', { hour12: false });
+            document.getElementById('cam-date').innerText = now.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+            setTimeout(updateClock, 1000);
+        }
+        window.onload = function() {
+            // 1. Chạy đồng hồ camera
+            updateClock();
+            
+            // 2. Tự động tạo danh sách Giờ từ 01-12
+            const hNodes = [document.getElementById('s-h'), document.getElementById('e-h')];
+            hNodes.forEach(node => {
+                node.innerHTML = ''; // Xóa sạch dữ liệu cũ
+                for(let i=1; i<=12; i++) {
+                    let v = i < 10 ? '0'+i : i;
+                    node.innerHTML += `<option value="${v}">${v}</option>`;
+                }
+            });
+
+            // 3. Tự động tạo danh sách Phút từ 00-59
+            const mNodes = [document.getElementById('s-m'), document.getElementById('e-m')];
+            mNodes.forEach(node => {
+                node.innerHTML = ''; // Xóa các mốc 00, 15, 30, 45 bị fix cứng trong HTML
+                for(let i=0; i<=59; i++) {
+                    let v = i < 10 ? '0'+i : i;
+                    node.innerHTML += `<option value="${v}">${v}</option>`;
+                }
+            });
+        };
+
+        function switchScreen(id) {
+            document.getElementById('screen-modes').classList.add('hidden');
+            document.getElementById('screen-monitor').classList.add('hidden');
+            document.getElementById(`screen-${id}`).classList.remove('hidden');
+        }
+
+        function goBack(target) { switchScreen(target); }
+        function openEcoPopup() { document.getElementById('eco-pop').classList.remove('hidden'); }
+
+        function goMonitor(mode) {
+            document.getElementById('eco-pop').classList.add('hidden');
+            switchScreen('monitor');
+            
+            const badge = document.getElementById('current-mode-tag');
+            const speed = document.getElementById('val-speed');
+            const people = document.getElementById('val-people');
+            const blind = document.getElementById('cam-blind');
+            const status = document.getElementById('cam-status');
+
+            if(mode === 'Manual') {
+                badge.className = "px-6 py-2 rounded-full font-black text-xs bg-blue-600";
+                badge.innerText = "MODE: MANUAL";
+                speed.innerText = "50%";
+                people.innerText = "N/A";
+                // Sửa remove thành add để luôn ẩn cái màn che camera đi
+                blind.classList.add('hidden'); 
+                status.innerText = "● LIVE";
+                status.className = "text-[10px] font-bold text-green-400";
+            }
+            else if(mode === 'Eco') {
+                const s = `${document.getElementById('s-h').value}:${document.getElementById('s-m').value} ${document.getElementById('s-ap').value}`;
+                const e = `${document.getElementById('e-h').value}:${document.getElementById('e-m').value} ${document.getElementById('e-ap').value}`;
+                badge.className = "px-6 py-2 rounded-full font-black text-xs bg-green-600";
+                badge.innerText = `ECO: ${s} - ${e}`;
+                speed.innerText = "25%";
+                people.innerText = "N/A";
+                // Tương tự, ẩn màn che ở chế độ Eco
+                blind.classList.add('hidden');
+                status.innerText = "● LIVE";
+                status.className = "text-[10px] font-bold text-green-400";
+            }
+            else if(mode === 'Smart') {
+                badge.className = "px-6 py-2 rounded-full font-black text-xs bg-purple-600";
+                badge.innerText = "MODE: SMART AI";
+                speed.innerText = "85%";
+                people.innerText = "Đang quét...";
+                blind.classList.add('hidden');
+                status.innerText = "● LIVE";
+                status.className = "text-[10px] font-bold text-green-400";
+            }
+        }
+    </script>
+</body>
+</html>

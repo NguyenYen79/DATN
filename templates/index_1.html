@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Fan Dashboard</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 20px; background: #e0f7fa; }
+        .container { max-width: 800px; margin: auto; background: white; padding: 20px; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
+        .header { text-align: center; margin-bottom: 20px; color: #00838f; }
+        
+        /* Khung Camera */
+        .video-feed { width: 100%; height: 400px; background: #222; margin-bottom: 20px; display: flex; align-items: center; justify-content: center; color: white; border-radius: 10px; overflow: hidden; border: 2px solid #00bcd4;}
+        
+        /* Chuyển Tab */
+        .tabs { display: flex; justify-content: center; margin-bottom: 20px; border-bottom: 2px solid #ddd;}
+        .tab-btn { flex: 1; padding: 12px 20px; cursor: pointer; border: none; background: none; font-size: 16px; font-weight: bold; color: #666; transition: 0.3s; }
+        .tab-btn:hover { color: #00bcd4; }
+        .tab-btn.active { color: #00bcd4; border-bottom: 3px solid #00bcd4; }
+        
+        /* Nội dung Tab */
+        .tab-content { display: none; padding: 20px; text-align: center; }
+        .tab-content.active { display: block; animation: fadeIn 0.4s; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        /* Nút bấm & Input cơ bản */
+        .control-btn { padding: 10px 20px; background: #00bcd4; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; margin: 10px; }
+        .control-btn:hover { background: #0097a7; }
+        input[type="range"] { width: 80%; margin: 15px 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h2>Hệ Thống Quạt Thông Minh</h2>
+            <p>ĐATN: Ứng dụng thị giác máy tính vào tiết kiệm năng lượng</p>
+        </div>
+
+        <div class="video-feed">
+            <img src="{{ url_for('video_feed') }}" width="100%" height="100%" style="object-fit: contain;">
+        </div>
+
+        <div class="tabs">
+            <button class="tab-btn active" onclick="openTab('manual', this)">Manual</button>
+            <button class="tab-btn" onclick="openTab('eco', this)">Eco</button>
+            <button class="tab-btn" onclick="openTab('smart', this)">Smart</button>
+        </div>
+
+        <div id="manual" class="tab-content active">
+            <h3>Điều khiển thủ công</h3>
+            <button class="control-btn">Bật Quạt</button>
+            <button class="control-btn" style="background: #ff5252;">Tắt Quạt</button>
+            <br>
+            <label>Tốc độ gió:</label><br>
+            <input type="range" min="0" max="100" value="50">
+        </div>
+
+        <div id="eco" class="tab-content">
+            <h3>Chế độ Tiết kiệm & Hẹn giờ</h3>
+            <label>Tắt quạt sau:</label>
+            <input type="number" placeholder="Số phút..." style="padding: 8px; width: 100px;">
+            <button class="control-btn">Bắt đầu đếm ngược</button>
+        </div>
+
+        <div id="smart" class="tab-content">
+            <h3>Điều khiển tự động qua AI</h3>
+            <p style="color: #4caf50; font-weight: bold;">Đang kích hoạt YOLO phân tích người & thói quen...</p>
+            <div style="display: flex; justify-content: space-around; margin-top: 20px;">
+                <div><strong>Số người phát hiện:</strong> <span style="font-size: 24px; color: #00838f;">0</span></div>
+                <div><strong>Nhiệt độ phòng:</strong> <span style="font-size: 24px; color: #ff9800;">-- °C</span></div>
+            </div>
+            <p style="margin-top: 20px;">Tốc độ quạt hiện tại: <strong>Tự động</strong></p>
+        </div>
+    </div>
+
+    <script>
+        // Hàm chuyển đổi qua lại giữa các Tab
+        function openTab(tabName, btnElement) {
+            let contents = document.getElementsByClassName("tab-content");
+            for (let i = 0; i < contents.length; i++) {
+                contents[i].classList.remove("active");
+            }
+            let btns = document.getElementsByClassName("tab-btn");
+            for (let i = 0; i < btns.length; i++) {
+                btns[i].classList.remove("active");
+            }
+            document.getElementById(tabName).classList.add("active");
+            btnElement.classList.add("active");
+        }
+    </script>
+</body>
+</html>

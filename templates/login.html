@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Đăng nhập - Smart Fan System</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, sans-serif; }
+        body { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; background: linear-gradient(135deg, #e0f7fa 0%, #80deea 100%); }
+        .container { background-color: white; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); width: 100%; max-width: 400px; padding: 40px 30px; }
+        .header { text-align: center; margin-bottom: 30px; }
+        .header h2 { color: #00838f; margin-bottom: 5px; }
+        .form-group { margin-bottom: 20px; }
+        .form-group label { display: block; margin-bottom: 8px; color: #555; font-weight: 500; }
+        .form-group input { width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 8px; outline: none; transition: 0.3s; }
+        .form-group input:focus { border-color: #00bcd4; }
+        .btn { width: 100%; padding: 12px; background-color: #00bcd4; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; }
+        .btn:hover { background-color: #0097a7; }
+        .error { color: red; text-align: center; margin-bottom: 15px; font-size: 14px; }
+        .footer { margin-top: 30px; color: #555; font-size: 13px; text-align: center; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div class="header">
+            <h2>Smart Fan Control</h2>
+            <p style="color: #777; font-size: 14px;">Hệ thống làm mát thông minh</p>
+        </div>
+
+        {% if error %}
+            <div class="error">{{ error }}</div>
+        {% endif %}
+
+        <form action="{{ url_for('login') }}" method="POST">
+            <div class="form-group">
+                <label for="username">Tài khoản</label>
+                <input type="text" id="username" name="username" placeholder="Nhập tên tài khoản" required>
+            </div>
+            <div class="form-group">
+                <label for="password">Mật khẩu</label>
+                <input type="password" id="password" name="password" placeholder="Nhập mật khẩu" required>
+            </div>
+            <button type="submit" class="btn">Đăng nhập</button>
+        </form>
+    </div>
+
+    <div class="footer">
+        <p><strong>Đồ án tốt nghiệp</strong></p>
+        <p>SVTH: Trần Hữu Khánh Toàn - 22146423</p>
+        <p>Nguyễn Thị Yến - 22146454</p>
+    </div>
+
+</body>
+</html>

@@ -1,0 +1,59 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&display=swap');
+
+body { 
+    font-family: 'Plus Jakarta Sans', sans-serif; 
+    background: #1abb22; 
+    color: white; 
+    overflow: hidden; 
+}
+
+.glass { 
+    background: rgba(233, 236, 236, 0.6); 
+    backdrop-filter: blur(12px); 
+    border: 1px solid rgba(255,255,255,0.08); 
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37); /* Đã sửa lỗi cú pháp shadow thành box-shadow */
+}
+
+.fan-spin { 
+    animation: spin 2s linear infinite; 
+}
+
+@keyframes spin { 
+    from { transform: rotate(0deg); } 
+    to { transform: rotate(360deg); } 
+}
+
+.hidden { 
+    display: none !important; 
+}
+
+select { 
+    cursor: pointer; 
+    transition: all 0.2s; 
+}
+
+select:hover { 
+    border-color: #10b981 !important; 
+}
+
+/* Thay .ptz-btn.active cũ bằng: */
+.ptz-btn.active {
+    background: #065f46 !important;
+    color: #34d399 !important;
+    transform: scale(0.9);
+    box-shadow: 0 0 0 2px #34d399 !important;
+    border-color: #34d399 !important;
+}
+
+.ptz-dark {
+    background: #1e293b;
+    border: 1px solid #334155;
+}
+
+.ptz-btn.active {
+    background: #065f46 !important;
+    color: #34d399 !important;
+    transform: scale(0.9);
+    box-shadow: 0 0 0 2px #34d399 !important;
+    border-color: #34d399 !important;
+}

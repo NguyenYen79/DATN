@@ -1,0 +1,2127 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FanCo AI - Quản lý Tiết kiệm Năng lượng</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.4.10/hls.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        .repeat-day-btn { cursor:pointer; }
+        .repeat-day-btn span { display:inline-block; padding:4px 8px; border-radius:8px; font-size:12px; font-weight:700; background:#f1f5f9; color:#64748b; border:1.5px solid #e2e8f0; transition:all .15s; }
+        .repeat-day-btn input:checked + span { background:#d1fae5; color:#065f46; border-color:#10b981; }
+        .mini-card { background:#f8fafc; border:1px solid #e2e8f0; border-radius:14px; padding:10px 14px; display:flex; justify-content:space-between; align-items:center; }
+        body.dark .mini-card { background:#0f172a !important; border-color:#334155 !important; }
+
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+        .fan-spin { animation: fanrotate 2s linear infinite; }
+        @keyframes fanrotate { 100% { transform: rotate(360deg); } }
+
+        #cam-video, #cam-img {
+            width: 100%; height: 100%;
+            object-fit: contain;
+            position: absolute; inset: 0; z-index: 0;
+            background: #0f172a;
+        }
+        .cam-scanline::after {
+            content: ''; position: absolute; inset: 0;
+            background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px);
+            pointer-events: none; z-index: 2;
+        }
+        @keyframes livepulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+        .live-dot { animation: livepulse 1.5s ease-in-out infinite; }
+
+        /* DARK MODE */
+        body.dark { background: #0f172a !important; color: #e2e8f0; }
+        body.dark #sidebar { background: #1e293b !important; border-color: #334155 !important; }
+        body.dark #sidebar nav a { color: #94a3b8; }
+        body.dark header { background: #1e293b !important; border-color: #334155 !important; }
+        body.dark .bg-white { background: #1e293b !important; }
+        body.dark .bg-slate-50 { background: #0f172a !important; }
+        body.dark .bg-slate-100 { background: #1e293b !important; }
+        body.dark .border-slate-100, body.dark .border-slate-200 { border-color: #334155 !important; }
+        body.dark .text-slate-800 { color: #e2e8f0 !important; }
+        body.dark .text-slate-700 { color: #cbd5e1 !important; }
+        body.dark .text-slate-600 { color: #94a3b8 !important; }
+        body.dark .text-slate-500 { color: #64748b !important; }
+        body.dark #theme-pill { background: #f59e0b !important; }
+        body.dark #theme-knob { left: auto !important; right: 0.125rem !important; }
+
+        .ptz-dark { background: #1e293b !important; border: 1px solid #334155 !important; color: #94a3b8; }
+        .ptz-btn.active {
+            background: #065f46 !important; color: #34d399 !important;
+            transform: scale(0.9);
+            box-shadow: 0 0 0 2px #34d399 !important;
+            border-color: #34d399 !important;
+        }
+
+        /* ── RPM Slider ── */
+        .rpm-range { -webkit-appearance:none; appearance:none; width:100%; height:6px; border-radius:999px; background:#e2e8f0; outline:none; cursor:pointer; }
+        .rpm-range::-webkit-slider-thumb { -webkit-appearance:none; width:20px; height:20px; border-radius:50%; background:#10b981; cursor:pointer; box-shadow:0 0 0 3px #d1fae5; transition:all .15s; }
+        .rpm-range::-webkit-slider-thumb:hover { background:#059669; box-shadow:0 0 0 5px #a7f3d0; }
+
+        .fan-state { display:inline-flex; align-items:center; gap:5px; padding:3px 10px; border-radius:20px; font-size:11px; font-weight:700; }
+        .fan-state.on  { background:#d1fae5; color:#065f46; }
+        .fan-state.off { background:#f1f5f9; color:#94a3b8; }
+
+        /* TRANG THÔNG TIN DỰ ÁN */
+        #page-home { display:none; }
+        #page-main { display:flex; }
+        .info-section { border-left: 3px solid #10b981; padding-left: 14px; margin-bottom: 20px; }
+        .tech-badge { display:inline-flex; align-items:center; gap:6px; padding:5px 12px; border-radius:20px; font-size:12px; font-weight:700; background:#f1f5f9; color:#475569; border:1px solid #e2e8f0; }
+        body.dark .tech-badge { background:#1e293b !important; color:#94a3b8 !important; border-color:#334155 !important; }
+        body.dark .info-section { border-color:#10b981; }
+        .member-card { background:#f8fafc; border:1px solid #e2e8f0; border-radius:16px; padding:16px; display:flex; align-items:center; gap:14px; }
+        body.dark .member-card { background:#0f172a !important; border-color:#334155 !important; }
+        .step-circle { width:32px; height:32px; border-radius:50%; background:#10b981; color:#fff; display:flex; align-items:center; justify-content:center; font-weight:900; font-size:14px; flex-shrink:0; }
+        /* ── CÀI ĐẶT NGƯỠNG NHIỆT ── */
+        #page-settings { display:none; }
+        .threshold-card { border-radius:16px; padding:20px; border:2px solid; transition:all .2s; }
+        .threshold-card.low  { background:#eff6ff; border-color:#bfdbfe; }
+        .threshold-card.mid  { background:#fffbeb; border-color:#fde68a; }
+        .threshold-card.high { background:#fff1f2; border-color:#fecdd3; }
+        .threshold-card.low.active-zone  { border-color:#3b82f6; box-shadow:0 0 0 3px #bfdbfe; }
+        .threshold-card.mid.active-zone  { border-color:#f59e0b; box-shadow:0 0 0 3px #fde68a; }
+        .threshold-card.high.active-zone { border-color:#ef4444; box-shadow:0 0 0 3px #fecdd3; }
+        body.dark .threshold-card.low  { background:#172033 !important; border-color:#1e40af !important; }
+        body.dark .threshold-card.mid  { background:#1c1a0f !important; border-color:#92400e !important; }
+        body.dark .threshold-card.high { background:#1f1014 !important; border-color:#9f1239 !important; }
+        .thresh-input { width:68px; padding:6px 8px; border-radius:10px; border:1.5px solid #e2e8f0; font-weight:700; font-size:15px; outline:none; background:#fff; text-align:center; transition:border .2s; }
+        .thresh-input:focus { border-color:#10b981; }
+        body.dark .thresh-input { background:#0f172a !important; border-color:#334155 !important; color:#e2e8f0 !important; }
+        .rpm-mini-range { -webkit-appearance:none; appearance:none; width:100%; height:6px; border-radius:999px; outline:none; cursor:pointer; }
+        .rpm-mini-range::-webkit-slider-thumb { -webkit-appearance:none; width:18px; height:18px; border-radius:50%; cursor:pointer; transition:all .15s; }
+        .range-low::-webkit-slider-thumb  { background:#3b82f6; box-shadow:0 0 0 3px #bfdbfe; }
+        .range-mid::-webkit-slider-thumb  { background:#f59e0b; box-shadow:0 0 0 3px #fde68a; }
+        .range-high::-webkit-slider-thumb { background:#ef4444; box-shadow:0 0 0 3px #fecdd3; }
+        /* ── BÁO CÁO ── */
+        #page-report { display:none; }
+        .report-card { background:#fff; border-radius:18px; border:1px solid #e2e8f0; padding:18px 20px; display:flex; justify-content:space-between; align-items:center; box-shadow:0 1px 3px rgba(0,0,0,.04); }
+        body.dark .report-card { background:#1e293b !important; border-color:#334155 !important; }
+        .filter-btn { padding:7px 18px; border-radius:10px; font-size:13px; font-weight:700; border:1.5px solid #e2e8f0; background:#fff; color:#64748b; cursor:pointer; transition:all .15s; }
+        .filter-btn.active { background:#10b981; color:#fff; border-color:#10b981; }
+        body.dark .filter-btn { background:#1e293b !important; border-color:#334155 !important; color:#94a3b8; }
+        body.dark .filter-btn.active { background:#10b981 !important; color:#fff !important; }
+        /* ── LỊCH SỬ ── */
+        #page-history { display:none; }
+        .history-card { background:#fff; border-radius:18px; border:1px solid #e2e8f0; padding:18px 20px; display:flex; justify-content:space-between; align-items:center; box-shadow:0 1px 3px rgba(0,0,0,.04); }
+        body.dark .history-card { background:#1e293b !important; border-color:#334155 !important; }
+        .period-btn { padding:7px 18px; border-radius:10px; font-size:13px; font-weight:700; border:1.5px solid #e2e8f0; background:#fff; color:#64748b; cursor:pointer; transition:all .15s; }
+        .period-btn.active { background:#6366f1; color:#fff; border-color:#6366f1; }
+        body.dark .period-btn { background:#1e293b !important; border-color:#334155 !important; color:#94a3b8; }
+        body.dark .period-btn.active { background:#6366f1 !important; color:#fff !important; }
+        .event-row { display:grid; grid-template-columns:120px 80px 70px 60px 80px 1fr; gap:8px; align-items:center; padding:10px 14px; border-radius:12px; font-size:13px; }
+        .event-row:nth-child(even) { background:#f8fafc; }
+        body.dark .event-row:nth-child(even) { background:#0f172a !important; }
+        .event-badge { display:inline-block; padding:2px 8px; border-radius:20px; font-size:11px; font-weight:700; }
+        /* ── HẸN GIỜ ECO ── */
+        .timer-input { width:56px; padding:6px 4px; border-radius:10px; border:1.5px solid #e2e8f0; font-weight:700; font-size:18px; outline:none; background:#fff; text-align:center; }
+        .timer-input:focus { border-color:#10b981; }
+        body.dark .timer-input { background:#0f172a !important; border-color:#334155 !important; color:#e2e8f0 !important; }
+        .timer-progress { height:8px; border-radius:999px; background:#e2e8f0; overflow:hidden; }
+        .timer-progress-bar { height:100%; border-radius:999px; background:linear-gradient(to right, #10b981, #3b82f6); transition:width .9s linear; }
+        .timer-badge { display:inline-flex; align-items:center; gap:5px; padding:3px 10px; border-radius:20px; font-size:11px; font-weight:700; }
+        .timer-badge.waiting  { background:#f1f5f9; color:#94a3b8; }
+        .timer-badge.running  { background:#d1fae5; color:#065f46; }
+        .timer-badge.finished { background:#fee2e2; color:#991b1b; }
+   </style>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans h-screen flex overflow-hidden">
+
+    <!-- SIDEBAR -->
+    <aside id="sidebar" class="w-64 bg-white border-r border-slate-200 flex flex-col shadow-sm z-10 flex-shrink-0">
+        <div class="h-20 flex items-center px-6 border-b border-slate-100">
+            <div class="flex items-center gap-3 text-emerald-600">
+                <i class="fas fa-leaf text-2xl"></i>
+                <h1 class="font-bold text-lg leading-tight uppercase tracking-wide">Tiết kiệm<br>Năng lượng</h1>
+            </div>
+        </div>
+        <nav class="flex-1 px-4 py-6 space-y-2">
+            <a href="#" onclick="openHome()" class="flex items-center gap-3 px-4 py-3 text-slate-500 hover:bg-slate-50 hover:text-slate-700 rounded-xl font-medium transition">
+                <i class="fas fa-home"></i> Trang chủ
+            </a>
+            <a href="#" onclick="openSettings()" class="flex items-center gap-3 px-4 py-3 text-slate-500 hover:bg-slate-50 hover:text-slate-700 rounded-xl font-medium transition">
+                <i class="fas fa-cog"></i> Cài đặt chung
+            </a>
+            <a href="#" onclick="openReport()" class="flex items-center gap-3 px-4 py-3 text-slate-500 hover:bg-slate-50 hover:text-slate-700 rounded-xl font-medium transition">
+                <i class="fas fa-chart-pie"></i> Báo cáo
+            </a>
+            <a href="#" onclick="openHistory()" class="flex items-center gap-3 px-4 py-3 text-slate-500 hover:bg-slate-50 hover:text-slate-700 rounded-xl font-medium transition">
+                <i class="fas fa-history"></i> Lịch sử
+            </a>
+        </nav>
+        <div class="p-4 border-t border-slate-100 space-y-1">
+            <button onclick="toggleTheme()" id="theme-btn"
+                class="w-full flex items-center justify-between px-4 py-3 text-slate-500 hover:bg-slate-50 rounded-xl font-medium transition">
+                <div class="flex items-center gap-3">
+                    <i id="theme-icon" class="fas fa-moon"></i>
+                    <span id="theme-label">Giao diện tối</span>
+                </div>
+                <div id="theme-pill" class="w-10 h-5 bg-slate-200 rounded-full relative transition-colors duration-300">
+                    <div id="theme-knob" class="w-4 h-4 bg-white rounded-full shadow absolute top-0.5 left-0.5 transition-all duration-300"></div>
+                </div>
+            </button>
+            <a href="{{ url_for('logout') }}" class="flex items-center gap-3 px-4 py-3 text-red-500 hover:bg-red-50 rounded-xl font-medium transition">
+                <i class="fas fa-sign-out-alt"></i> Đăng xuất
+            </a>
+        </div>
+    </aside>
+
+    <!-- MAIN -->
+    <main class="flex-1 flex flex-col h-screen overflow-hidden min-w-0">
+
+        <!-- HEADER -->
+        <header class="bg-white border-b border-slate-200 shadow-sm px-4 md:px-6 py-3 flex flex-wrap items-center justify-between gap-3 flex-shrink-0">
+            <div class="flex items-center bg-slate-100 p-1 rounded-2xl border border-slate-200">
+                <button onclick="setMode('Manual')" id="btn-Manual" class="mode-btn px-4 md:px-12 py-10 rounded-xl text-xl font-bold transition-all bg-white shadow-sm text-emerald-600">
+                    <i class="fas fa-sliders-h mr-1 md:mr-2"></i><span>MANUAL</span>
+                </button>
+                <button onclick="setMode('Eco')" id="btn-Eco" class="mode-btn px-4 md:px-12 py-10 rounded-xl text-xl font-bold text-slate-500 hover:text-slate-700 transition-all">
+                    <i class="fas fa-leaf mr-1 md:mr-2"></i><span>ECO</span>
+                </button>
+                <button onclick="setMode('Smart')" id="btn-Smart" class="mode-btn px-4 md:px-12 py-10 rounded-xl text-xl font-bold text-slate-500 hover:text-slate-700 transition-all">
+                    <i class="fas fa-robot mr-1 md:mr-2"></i><span>SMART</span>
+                </button>
+            </div>
+            <div class="flex items-center gap-4 text-slate-600">
+                <div class="flex items-center gap-2">
+                    <div class="w-8 h-8 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center font-bold">A</div>
+                    <span class="font-semibold text-sm">{{ username|default('Admin') }}</span>
+                </div>
+                <div class="relative cursor-pointer hover:text-emerald-600">
+                    <i class="fas fa-bell"></i>
+                    <span class="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+                </div>
+                <div class="hidden sm:flex items-center gap-2 text-sm font-medium border-l border-slate-300 pl-4">
+                    <i class="far fa-calendar-alt"></i>
+                    <span id="header-date">--/--/----</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- CONTENT -->
+        <div class="flex-1 overflow-hidden p-3 md:p-4 bg-slate-50/50">
+
+            <!-- ══ TRANG THÔNG TIN DỰ ÁN ══ -->
+            <div id="page-home" class="h-full overflow-y-auto">
+                <div class="max-w-4xl mx-auto py-2 space-y-5">
+
+                    <!-- Nút quay lại -->
+                    <div>
+                        <button onclick="openMain()" class="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 hover:text-emerald-600 hover:border-emerald-300 rounded-xl font-semibold text-sm shadow-sm transition-all active:scale-95">
+                            <i class="fas fa-arrow-left text-xs"></i> Quay lại hệ thống
+                        </button>
+                    </div>
+
+                    <!-- Hero banner -->
+                    <div class="rounded-2xl overflow-hidden shadow-sm border border-slate-100"
+                         style="background: linear-gradient(135deg, #064e3b 0%, #065f46 50%, #0f766e 100%);">
+                        <div class="p-6 md:p-8 flex flex-col md:flex-row items-center gap-6">
+                            <div class="flex-shrink-0 p-2 bg-white rounded-3xl shadow-lg" style="box-shadow: 0 8px 32px rgba(0,0,0,0.18);">
+                                <img src="/static/logofarano.jpg" alt="FanCo Logo" class="w-20 h-20 rounded-2xl object-contain">
+                            </div>
+                            <div class="text-center md:text-left">
+                                <div class="text-emerald-300 text-xs font-bold uppercase tracking-widest mb-1">Đồ Án Tốt Nghiệp · 2026</div>
+                                <h2 class="text-white text-2xl md:text-3xl font-black leading-tight mb-2">FanCo AI</h2>
+                                <p class="text-emerald-100 text-sm leading-relaxed">Hệ thống quản lý quạt công nghiệp thông minh sử dụng AI nhận diện người và biến tần tự động điều chỉnh tốc độ nhằm tiết kiệm năng lượng tối ưu.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Thông tin trường -->
+                    <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
+                    <div class="flex items-center gap-4">
+                        <!-- Logo trường -->
+                        <img src="/static/logotruong.png" alt="Logo Trường" class="w-16 h-16 object-contain flex-shrink-0">
+
+                        <!-- Tên trường/khoa/bộ môn căn giữa -->
+                        <div class="flex-1 text-center">
+                            <p class="text-xs font-bold text-emerald-600 uppercase tracking-wide mb-2">Đơn vị thực hiện</p>
+                            <p class="font-black text-slate-800 text-base leading-snug">Trường Đại học Công Nghệ Kỹ Thuật TP.HCM</p>
+                            <p class="text-slate-500 text-sm font-semibold mt-1">Khoa Cơ Khí Chế Tạo Máy</p>
+                            <p class="text-slate-500 text-sm font-semibold mt-0.5">Bộ Môn Cơ Điện Tử</p>
+                        </div>
+
+                        <!-- Logo khoa -->
+                        <img src="/static/FMEE.jpg" alt="Logo Khoa" class="w-16 h-16 object-contain flex-shrink-0">
+                    </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4">
+                            <div class="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                <div class="w-9 h-9 rounded-xl bg-blue-50 text-blue-500 flex items-center justify-center flex-shrink-0">
+                                    <i class="fas fa-chalkboard-teacher text-sm"></i>
+                                </div>
+                                <div>
+                                    <p class="text-xs text-slate-400 font-semibold">Giáo viên hướng dẫn</p>
+                                    <p class="font-bold text-slate-700 text-sm">ThS. Dương Thế Phong</p>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                <div class="w-9 h-9 rounded-xl bg-orange-50 text-orange-500 flex items-center justify-center flex-shrink-0">
+                                    <i class="fas fa-calendar-check text-sm"></i>
+                                </div>
+                                <div>
+                                    <p class="text-xs text-slate-400 font-semibold">Năm thực hiện</p>
+                                    <p class="font-bold text-slate-700 text-sm">2026</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Nhóm thực hiện -->
+                    <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
+                        <h4 class="font-black text-slate-700 mb-4 flex items-center gap-2">
+                            <i class="fas fa-users text-emerald-500"></i> Nhóm thực hiện
+                        </h4>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div class="member-card">
+                                <div class="w-12 h-12 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center font-black text-lg flex-shrink-0">1</div>
+                                <div>
+                                    <p class="font-bold text-slate-800">Nguyễn Thị Yến</p>
+                                    <p class="text-xs text-slate-400 font-semibold mt-0.5">MSSV: 22146454</p>
+                                    <span class="inline-block mt-1 px-2 py-0.5 bg-emerald-50 text-emerald-600 text-xs font-bold rounded-full border border-emerald-100"></span>
+                                </div>
+                            </div>
+                            <div class="member-card">
+                                <div class="w-12 h-12 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-black text-lg flex-shrink-0">2</div>
+                                <div>
+                                    <p class="font-bold text-slate-800">Trần Hữu Khánh Toàn</p>
+                                    <p class="text-xs text-slate-400 font-semibold mt-0.5">MSSV: 22146423</p>
+                                    <span class="inline-block mt-1 px-2 py-0.5 bg-blue-50 text-blue-600 text-xs font-bold rounded-full border border-blue-100"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 3 chế độ -->
+                    <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
+                        <h4 class="font-black text-slate-700 mb-4 flex items-center gap-2">
+                            <i class="fas fa-sliders-h text-emerald-500"></i> 3 Chế độ hoạt động
+                        </h4>
+                        <div class="flex flex-col gap-3">
+                            <div class="p-4 rounded-xl border border-slate-100 bg-slate-50 flex items-center gap-4">
+                                <div class="w-12 h-12 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center flex-shrink-0 text-lg">
+                                    <i class="fas fa-sliders-h"></i>
+                                </div>
+                                <div>
+                                    <p class="font-bold text-slate-800 mb-1">MANUAL</p>
+                                    <p class="text-sm text-slate-500 leading-relaxed">Người dùng toàn quyền kiểm soát tốc độ quạt qua thanh trượt RPM và biến tần.</p>
+                                </div>
+                            </div>
+                            <div class="p-4 rounded-xl border border-emerald-100 bg-emerald-50 flex items-center gap-4">
+                                <div class="w-12 h-12 rounded-xl bg-emerald-200 text-emerald-700 flex items-center justify-center flex-shrink-0 text-lg">
+                                    <i class="fas fa-leaf"></i>
+                                </div>
+                                <div>
+                                    <p class="font-bold text-slate-800 mb-1">ECO</p>
+                                    <p class="text-sm text-slate-500 leading-relaxed">Đặt lịch trình bật/tắt theo giờ, tự động tiết kiệm điện trong khung giờ không cần thiết.</p>
+                                </div>
+                            </div>
+                            <div class="p-4 rounded-xl border border-purple-100 bg-purple-50 flex items-center gap-4">
+                                <div class="w-12 h-12 rounded-xl bg-purple-200 text-purple-700 flex items-center justify-center flex-shrink-0 text-lg">
+                                    <i class="fas fa-robot"></i>
+                                </div>
+                                <div>
+                                    <p class="font-bold text-slate-800 mb-1">SMART</p>
+                                    <p class="text-sm text-slate-500 leading-relaxed">AI (YOLOv8) nhận diện số người qua camera và cảm biến, tự động điều chỉnh tốc độ phù hợp theo thời gian thực.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Kiến trúc hệ thống -->
+                    <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
+                        <h4 class="font-black text-slate-700 mb-4 flex items-center gap-2">
+                            <i class="fas fa-project-diagram text-emerald-500"></i> Kiến trúc hệ thống
+                        </h4>
+                        <div class="flex flex-wrap items-center gap-2 justify-center">
+                            <div class="flex flex-col items-center gap-1 px-4 py-3 bg-slate-800 rounded-xl text-white text-xs font-bold text-center">
+                                <i class="fas fa-camera text-emerald-400 text-lg"></i>Camera IP 
+                            </div>
+                            <i class="fas fa-arrow-right text-slate-300 text-sm"></i>
+                            <div class="flex flex-col items-center gap-1 px-4 py-3 bg-purple-600 rounded-xl text-white text-xs font-bold text-center">
+                                <i class="fas fa-brain text-purple-200 text-lg"></i>YOLO detect
+                            </div>
+                            <i class="fas fa-arrow-right text-slate-300 text-sm"></i>
+                            <div class="flex flex-col items-center gap-1 px-4 py-3 bg-blue-600 rounded-xl text-white text-xs font-bold text-center">
+                                <i class="fas fa-server text-blue-200 text-lg"></i>Flask API
+                            </div>
+                            <i class="fas fa-arrow-right text-slate-300 text-sm"></i>
+                            <div class="flex flex-col items-center gap-1 px-4 py-3 bg-orange-500 rounded-xl text-white text-xs font-bold text-center">
+                                <i class="fas fa-microchip text-orange-200 text-lg"></i>Biến tần
+                            </div>
+                            <i class="fas fa-arrow-right text-slate-300 text-sm"></i>
+                            <div class="flex flex-col items-center gap-1 px-4 py-3 bg-emerald-600 rounded-xl text-white text-xs font-bold text-center">
+                                <i class="fas fa-fan text-emerald-200 text-lg"></i>Quạt CN
+                            </div>
+                        </div>
+                        <div class="mt-4 grid grid-cols-2 md:grid-cols-4 gap-2">
+                            <div class="p-3 bg-slate-50 rounded-xl border border-slate-100 text-center">
+                                <p class="text-xs text-slate-400 font-semibold">Camera</p>
+                                <p class="font-bold text-slate-700 text-sm mt-0.5">Ezviz C6N</p>
+                            </div>
+                            <div class="p-3 bg-slate-50 rounded-xl border border-slate-100 text-center">
+                                <p class="text-xs text-slate-400 font-semibold">Cảm biến</p>
+                                <p class="font-bold text-slate-700 text-sm mt-0.5">DS18B20</p>
+                            </div>
+                            <div class="p-3 bg-slate-50 rounded-xl border border-slate-100 text-center">
+                                <p class="text-xs text-slate-400 font-semibold">Biến tần</p>
+                                <p class="font-bold text-slate-700 text-sm mt-0.5">VFD / Inverter</p>
+                            </div>
+                            <div class="p-3 bg-slate-50 rounded-xl border border-slate-100 text-center">
+                                <p class="text-xs text-slate-400 font-semibold">Máy chủ</p>
+                                <p class="font-bold text-slate-700 text-sm mt-0.5">Raspberry Pi</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Thống kê hiệu quả -->
+                    <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
+                        <h4 class="font-black text-slate-700 mb-4 flex items-center gap-2">
+                            <i class="fas fa-chart-bar text-emerald-500"></i> Hiệu quả tiết kiệm năng lượng
+                        </h4>
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                            <div class="p-4 rounded-xl bg-emerald-50 border border-emerald-100 text-center">
+                                <p class="text-2xl font-black text-emerald-600">~30%</p>
+                                <p class="text-xs font-semibold text-slate-500 mt-1">Tiết kiệm điện<br>so với chạy full</p>
+                            </div>
+                            <div class="p-4 rounded-xl bg-blue-50 border border-blue-100 text-center">
+                                <p class="text-2xl font-black text-blue-600">≤0.5s</p>
+                                <p class="text-xs font-semibold text-slate-500 mt-1">Độ trễ phản<br>hồi AI</p>
+                            </div>
+                            <div class="p-4 rounded-xl bg-purple-50 border border-purple-100 text-center">
+                                <p class="text-2xl font-black text-purple-600">95%</p>
+                                <p class="text-xs font-semibold text-slate-500 mt-1">Độ chính xác<br>nhận diện</p>
+                            </div>
+                            <div class="p-4 rounded-xl bg-orange-50 border border-orange-100 text-center">
+                                <p class="text-2xl font-black text-orange-500">24/7</p>
+                                <p class="text-xs font-semibold text-slate-500 mt-1">Hoạt động<br>liên tục</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Công nghệ sử dụng -->
+                    <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
+                        <h4 class="font-black text-slate-700 mb-4 flex items-center gap-2">
+                            <i class="fas fa-code text-emerald-500"></i> Công nghệ sử dụng
+                        </h4>
+                        <div class="flex flex-wrap gap-2">
+                            <span class="tech-badge"><i class="fab fa-python text-blue-500"></i> Python 3</span>
+                            <span class="tech-badge"><i class="fas fa-flask text-gray-500"></i> Flask</span>
+                            <span class="tech-badge"><i class="fas fa-brain text-purple-500"></i> YOLOv8</span>
+                            <span class="tech-badge"><i class="fas fa-eye text-blue-400"></i> OpenCV</span>
+                            <span class="tech-badge"><i class="fas fa-video text-red-500"></i> HLS Stream</span>
+                            <span class="tech-badge"><i class="fab fa-js text-yellow-500"></i> JavaScript</span>
+                            <span class="tech-badge"><i class="fas fa-wind text-cyan-500"></i> Tailwind CSS</span>
+                            <span class="tech-badge"><i class="fas fa-microchip text-orange-500"></i> Modbus RTU</span>
+                            <span class="tech-badge"><i class="fas fa-thermometer-half text-red-400"></i> DS18B20</span>
+                        </div>
+                    </div>
+
+                    <!-- Hướng dẫn sử dụng nhanh -->
+                    <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
+                        <h4 class="font-black text-slate-700 mb-4 flex items-center gap-2">
+                            <i class="fas fa-book-open text-emerald-500"></i> Hướng dẫn sử dụng nhanh
+                        </h4>
+                        <div class="space-y-3">
+                            <div class="flex items-start gap-3">
+                                <div class="step-circle">1</div>
+                                <div class="pt-1">
+                                    <p class="font-bold text-slate-700 text-sm">Chọn chế độ hoạt động</p>
+                                    <p class="text-xs text-slate-500 mt-0.5">Nhấn <strong>MANUAL</strong> để điều khiển thủ công, <strong>ECO</strong> để đặt lịch, hoặc <strong>SMART</strong> để AI tự điều khiển.</p>
+                                </div>
+                            </div>
+                            <div class="flex items-start gap-3">
+                                <div class="step-circle">2</div>
+                                <div class="pt-1">
+                                    <p class="font-bold text-slate-700 text-sm">Quan sát camera & nhiệt độ</p>
+                                    <p class="text-xs text-slate-500 mt-0.5">Camera hiển thị trực tiếp. Ở chế độ SMART, số người và nhiệt độ được hiển thị overlay trên video.</p>
+                                </div>
+                            </div>
+                            <div class="flex items-start gap-3">
+                                <div class="step-circle">3</div>
+                                <div class="pt-1">
+                                    <p class="font-bold text-slate-700 text-sm">Theo dõi & điều chỉnh</p>
+                                    <p class="text-xs text-slate-500 mt-0.5">Xem tốc độ quạt, nhiệt độ, năng lượng tiêu thụ trong bảng điều khiển bên phải theo thời gian thực.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- ══ TRANG LỊCH SỬ ══ -->
+            <div id="page-history" class="h-full overflow-y-auto">
+                <div class="max-w-4xl mx-auto py-2 space-y-4">
+
+                    <!-- Nút quay lại -->
+                    <div>
+                        <button onclick="openMain()" class="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 hover:text-emerald-600 hover:border-emerald-300 rounded-xl font-semibold text-sm shadow-sm transition-all active:scale-95">
+                            <i class="fas fa-arrow-left text-xs"></i> Quay lại hệ thống
+                        </button>
+                    </div>
+
+                    <!-- Header + bộ lọc + xuất Excel -->
+                    <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 flex items-center justify-between flex-wrap gap-3">
+                        <div class="flex items-center gap-3">
+                            <div class="w-11 h-11 rounded-xl bg-indigo-50 text-indigo-500 flex items-center justify-center text-xl">
+                                <i class="fas fa-history"></i>
+                            </div>
+                            <div>
+                                <h2 class="font-black text-slate-800 text-lg">Lịch sử hoạt động</h2>
+                                <p class="text-xs text-slate-400 font-semibold mt-0.5">Xem & xuất dữ liệu theo kỳ</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <button class="period-btn active" id="period-1m" onclick="setPeriod('1m')">1 tháng</button>
+                            <button class="period-btn" id="period-2m" onclick="setPeriod('2m')">2 tháng</button>
+                            <button class="period-btn" id="period-3m" onclick="setPeriod('3m')">3 tháng</button>
+                            <button onclick="exportExcel()" class="flex items-center gap-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-xl text-sm transition-all active:scale-95 shadow-sm">
+                                <i class="fas fa-file-excel"></i> Xuất Excel
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 4 Stat cards -->
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="history-card">
+                            <div>
+                                <p class="text-xs font-bold text-slate-500 mb-1">TỔNG ĐIỆN NĂNG</p>
+                                <p class="text-2xl font-black text-slate-800" id="his-energy">—</p>
+                            </div>
+                            <div class="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-500 flex items-center justify-center text-lg">
+                                <i class="fas fa-bolt"></i>
+                            </div>
+                        </div>
+                        <div class="history-card">
+                            <div>
+                                <p class="text-xs font-bold text-slate-500 mb-1">NHIỆT ĐỘ TRUNG BÌNH</p>
+                                <p class="text-2xl font-black text-slate-800" id="his-avgtemp">—</p>
+                            </div>
+                            <div class="w-11 h-11 rounded-xl bg-red-50 text-red-400 flex items-center justify-center text-lg">
+                                <i class="fas fa-thermometer-half"></i>
+                            </div>
+                        </div>
+                        <div class="history-card">
+                            <div>
+                                <p class="text-xs font-bold text-slate-500 mb-1">SỐ GIỜ HOẠT ĐỘNG</p>
+                                <p class="text-2xl font-black text-slate-800" id="his-uptime">—</p>
+                            </div>
+                            <div class="w-11 h-11 rounded-xl bg-blue-50 text-blue-500 flex items-center justify-center text-lg">
+                                <i class="fas fa-clock"></i>
+                            </div>
+                        </div>
+                        <div class="history-card">
+                            <div>
+                                <p class="text-xs font-bold text-slate-500 mb-1">AI CAN THIỆP</p>
+                                <p class="text-2xl font-black text-slate-800" id="his-aicount">—</p>
+                            </div>
+                            <div class="w-11 h-11 rounded-xl bg-purple-50 text-purple-500 flex items-center justify-center text-lg">
+                                <i class="fas fa-robot"></i>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Bảng lịch sử sự kiện -->
+                    <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
+                        <div class="flex items-center justify-between mb-4">
+                            <h4 class="font-black text-slate-700 flex items-center gap-2">
+                                <i class="fas fa-list-ul text-indigo-500"></i> Chi tiết sự kiện
+                            </h4>
+                            <span id="his-count" class="text-xs font-bold text-slate-400">— sự kiện</span>
+                        </div>
+
+                        <!-- Header bảng -->
+                        <div class="event-row bg-slate-50 font-black text-xs text-slate-500 uppercase mb-1" style="border-radius:10px;">
+                            <span>Thời gian</span>
+                            <span>Chế độ</span>
+                            <span>Nhiệt độ</span>
+                            <span>RPM</span>
+                            <span>Số người</span>
+                            <span>Sự kiện</span>
+                        </div>
+
+                        <!-- Các dòng sự kiện -->
+                        <div id="history-table-body"></div>
+
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- ══ TRANG BÁO CÁO ══ -->
+            <div id="page-report" class="h-full overflow-y-auto">
+                <div class="max-w-3xl mx-auto py-2 space-y-4">
+
+                    <!-- Nút quay lại -->
+                    <div>
+                        <button onclick="openMain()" class="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 hover:text-emerald-600 hover:border-emerald-300 rounded-xl font-semibold text-sm shadow-sm transition-all active:scale-95">
+                            <i class="fas fa-arrow-left text-xs"></i> Quay lại hệ thống
+                        </button>
+                    </div>
+
+                    <!-- Header + bộ lọc -->
+                    <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 flex items-center justify-between flex-wrap gap-3">
+                        <div class="flex items-center gap-3">
+                            <div class="w-11 h-11 rounded-xl bg-blue-50 text-blue-500 flex items-center justify-center text-xl">
+                                <i class="fas fa-chart-pie"></i>
+                            </div>
+                            <div>
+                                <h2 class="font-black text-slate-800 text-lg">Báo cáo hệ thống</h2>
+                                <p class="text-xs text-slate-400 font-semibold mt-0.5">Thống kê hoạt động & hiệu suất</p>
+                            </div>
+                        </div>
+                        <div class="flex gap-2">
+                            <button class="filter-btn active" id="filter-today" onclick="setFilter('today')">Hôm nay</button>
+                            <button class="filter-btn" id="filter-7day"  onclick="setFilter('7day')">7 ngày</button>
+                            <button class="filter-btn" id="filter-30day" onclick="setFilter('30day')">30 ngày</button>
+                        </div>
+                    </div>
+
+                    <!-- 4 Stat cards -->
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="report-card">
+                            <div>
+                                <p class="text-xs font-bold text-slate-500 mb-1">TỔNG ĐIỆN NĂNG</p>
+                                <p class="text-2xl font-black text-slate-800" id="rpt-energy">1.250 <span class="text-sm font-medium text-slate-400">kWh</span></p>
+                            </div>
+                            <div class="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-500 flex items-center justify-center text-lg">
+                                <i class="fas fa-bolt"></i>
+                            </div>
+                        </div>
+                        <div class="report-card">
+                            <div>
+                                <p class="text-xs font-bold text-slate-500 mb-1">THỜI GIAN HOẠT ĐỘNG</p>
+                                <p class="text-2xl font-black text-slate-800" id="rpt-uptime">18 <span class="text-sm font-medium text-slate-400">giờ 32 phút</span></p>
+                            </div>
+                            <div class="w-11 h-11 rounded-xl bg-blue-50 text-blue-500 flex items-center justify-center text-lg">
+                                <i class="fas fa-clock"></i>
+                            </div>
+                        </div>
+                        <div class="report-card">
+                            <div>
+                                <p class="text-xs font-bold text-slate-500 mb-1">NHIỆT ĐỘ TRUNG BÌNH</p>
+                                <p class="text-2xl font-black text-slate-800" id="rpt-avgtemp">28.5 <span class="text-sm font-medium text-slate-400">°C</span></p>
+                            </div>
+                            <div class="w-11 h-11 rounded-xl bg-red-50 text-red-400 flex items-center justify-center text-lg">
+                                <i class="fas fa-thermometer-half"></i>
+                            </div>
+                        </div>
+                        <div class="report-card">
+                            <div>
+                                <p class="text-xs font-bold text-slate-500 mb-1">AI ĐIỀU CHỈNH</p>
+                                <p class="text-2xl font-black text-slate-800" id="rpt-aicount">47 <span class="text-sm font-medium text-slate-400">lần</span></p>
+                            </div>
+                            <div class="w-11 h-11 rounded-xl bg-purple-50 text-purple-500 flex items-center justify-center text-lg">
+                                <i class="fas fa-robot"></i>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Biểu đồ nhiệt độ + RPM -->
+                    <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
+                        <div class="flex items-center justify-between mb-4">
+                            <h4 class="font-black text-slate-700 flex items-center gap-2">
+                                <i class="fas fa-chart-line text-emerald-500"></i> Nhiệt độ & Tốc độ quạt
+                            </h4>
+                            <div class="flex items-center gap-4 text-xs font-bold">
+                                <div class="flex items-center gap-1.5"><div class="w-3 h-3 rounded-full bg-red-400"></div><span class="text-slate-500">Nhiệt độ (°C)</span></div>
+                                <div class="flex items-center gap-1.5"><div class="w-3 h-3 rounded-full bg-blue-500"></div><span class="text-slate-500">Tốc độ (RPM)</span></div>
+                            </div>
+                        </div>
+                        <canvas id="report-chart" height="120"></canvas>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- ══ TRANG CÀI ĐẶT CHUNG ══ -->
+            <div id="page-settings" class="h-full overflow-y-auto">
+                <div class="max-w-2xl mx-auto py-2 space-y-4">
+
+                    <!-- Nút quay lại -->
+                    <div>
+                        <button onclick="openMain()" class="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 hover:text-emerald-600 hover:border-emerald-300 rounded-xl font-semibold text-sm shadow-sm transition-all active:scale-95">
+                            <i class="fas fa-arrow-left text-xs"></i> Quay lại hệ thống
+                        </button>
+                    </div>
+
+                    <!-- Header -->
+                    <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <div class="w-11 h-11 rounded-xl bg-orange-50 text-orange-500 flex items-center justify-center text-xl">
+                                <i class="fas fa-cog"></i>
+                            </div>
+                            <div>
+                                <h2 class="font-black text-slate-800 text-lg">Cài đặt chung</h2>
+                                <p class="text-xs text-slate-400 font-semibold mt-0.5">Cấu hình ngưỡng nhiệt độ cho chế độ SMART</p>
+                            </div>
+                        </div>
+                        <span class="px-3 py-1 bg-purple-50 text-purple-600 text-xs font-bold rounded-full border border-purple-100">
+                            <i class="fas fa-robot mr-1"></i> SMART Mode
+                        </span>
+                    </div>
+
+                    <!-- Nhiệt độ hiện tại -->
+                    <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
+                        <p class="text-xs font-bold text-slate-500 uppercase tracking-wide mb-3">Nhiệt độ hiện tại</p>
+                        <div class="flex items-center gap-4">
+                            <div class="w-16 h-16 rounded-2xl flex items-center justify-center flex-shrink-0" id="settings-temp-bg" style="background:#eff6ff;">
+                                <i class="fas fa-thermometer-half text-2xl" id="settings-temp-icon" style="color:#3b82f6;"></i>
+                            </div>
+                            <div>
+                                <div class="flex items-end gap-1">
+                                    <span class="text-4xl font-black" id="settings-temp-val" style="color:#3b82f6;">—</span>
+                                    <span class="text-slate-400 font-bold mb-1">°C</span>
+                                </div>
+                                <span id="settings-temp-badge" class="inline-block mt-1 px-3 py-0.5 bg-blue-50 text-blue-600 text-xs font-bold rounded-full border border-blue-100">Thấp</span>
+                            </div>
+                            <div class="flex-1 ml-4">
+                                <div class="h-4 rounded-full overflow-hidden relative" style="background:#f1f5f9;">
+                                    <div class="absolute inset-0 rounded-full" style="background:linear-gradient(to right,#3b82f6,#f59e0b,#ef4444);"></div>
+                                    <div id="temp-indicator" class="absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-white border-2 border-slate-600 rounded-full shadow transition-all duration-700" style="left:0%;"></div>
+                                </div>
+                                <div class="flex justify-between text-xs text-slate-400 font-semibold mt-1">
+                                    <span>0°C</span>
+                                    <span id="ind-low-label" class="text-blue-400">25°C</span>
+                                    <span id="ind-mid-label" class="text-amber-400">32°C</span>
+                                    <span>50°C</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Mức THẤP -->
+                    <div class="threshold-card low" id="card-low">
+                        <div class="flex items-center gap-3 mb-4">
+                            <div class="w-10 h-10 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center flex-shrink-0">
+                                <i class="fas fa-snowflake"></i>
+                            </div>
+                            <div class="flex-1">
+                                <p class="font-black text-slate-800">Mức THẤP</p>
+                                <p class="text-xs text-slate-500 mt-0.5">Quạt chạy chậm hoặc tắt</p>
+                            </div>
+                            <span id="badge-low" class="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs font-bold rounded-full border border-blue-200">● Chờ</span>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4 mb-3">
+                            <div>
+                                <p class="text-xs font-bold text-slate-500 mb-1.5">Nhiệt độ tối đa</p>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-xs text-slate-400 font-semibold">0°C —</span>
+                                    <input type="number" id="low-max" value="25" min="1" max="49" class="thresh-input" style="border-color:#bfdbfe;" oninput="updateSettings()">
+                                    <span class="text-xs text-blue-500 font-bold">°C</span>
+                                </div>
+                            </div>
+                            <div>
+                                <p class="text-xs font-bold text-slate-500 mb-1.5">Tốc độ quạt</p>
+                                <div class="flex items-center gap-2">
+                                    <input type="number" id="low-rpm" value="30" min="0" max="100" class="thresh-input" style="border-color:#bfdbfe;" oninput="document.getElementById('low-rpm-slider').value=this.value; updateSettings()">
+                                    <span class="text-xs text-blue-500 font-bold">RPM</span>
+                                </div>
+                            </div>
+                        </div>
+                        <input type="range" id="low-rpm-slider" min="0" max="100" value="30" class="rpm-mini-range range-low" style="background:#dbeafe;"
+                            oninput="document.getElementById('low-rpm').value=this.value; updateSettings()">
+                        <div class="flex justify-between text-xs font-bold mt-1 text-blue-400">
+                            <span>0</span><span id="low-rpm-disp" class="text-blue-600">30 RPM</span><span>100</span>
+                        </div>
+                    </div>
+
+                    <!-- Mức TRUNG BÌNH -->
+                    <div class="threshold-card mid" id="card-mid">
+                        <div class="flex items-center gap-3 mb-4">
+                            <div class="w-10 h-10 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center flex-shrink-0">
+                                <i class="fas fa-sun"></i>
+                            </div>
+                            <div class="flex-1">
+                                <p class="font-black text-slate-800">Mức TRUNG BÌNH</p>
+                                <p class="text-xs text-slate-500 mt-0.5">Quạt chạy tốc độ trung bình</p>
+                            </div>
+                            <span id="badge-mid" class="px-2 py-0.5 bg-amber-100 text-amber-700 text-xs font-bold rounded-full border border-amber-200">● Chờ</span>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4 mb-3">
+                            <div>
+                                <p class="text-xs font-bold text-slate-500 mb-1.5">Dải nhiệt độ</p>
+                                <div class="flex items-center gap-2">
+                                    <input type="number" id="mid-min" value="25" class="thresh-input" style="border-color:#fde68a; background:#fef9c3; width:56px;" readonly>
+                                    <span class="text-xs text-slate-400">—</span>
+                                    <input type="number" id="mid-max" value="32" min="1" max="49" class="thresh-input" style="border-color:#fde68a;" oninput="updateSettings()">
+                                    <span class="text-xs text-amber-500 font-bold">°C</span>
+                                </div>
+                                <p class="text-xs text-amber-400 font-semibold mt-1">* Min tự động = Max mức Thấp</p>
+                            </div>
+                            <div>
+                                <p class="text-xs font-bold text-slate-500 mb-1.5">Tốc độ quạt</p>
+                                <div class="flex items-center gap-2">
+                                    <input type="number" id="mid-rpm" value="60" min="0" max="100" class="thresh-input" style="border-color:#fde68a;" oninput="document.getElementById('mid-rpm-slider').value=this.value; updateSettings()">
+                                    <span class="text-xs text-amber-500 font-bold">RPM</span>
+                                </div>
+                            </div>
+                        </div>
+                        <input type="range" id="mid-rpm-slider" min="0" max="100" value="60" class="rpm-mini-range range-mid" style="background:#fef3c7;"
+                            oninput="document.getElementById('mid-rpm').value=this.value; updateSettings()">
+                        <div class="flex justify-between text-xs font-bold mt-1 text-amber-400">
+                            <span>0</span><span id="mid-rpm-disp" class="text-amber-600">60 RPM</span><span>100</span>
+                        </div>
+                    </div>
+
+                    <!-- Mức CAO -->
+                    <div class="threshold-card high" id="card-high">
+                        <div class="flex items-center gap-3 mb-4">
+                            <div class="w-10 h-10 rounded-xl bg-red-100 text-red-600 flex items-center justify-center flex-shrink-0">
+                                <i class="fas fa-fire"></i>
+                            </div>
+                            <div class="flex-1">
+                                <p class="font-black text-slate-800">Mức CAO</p>
+                                <p class="text-xs text-slate-500 mt-0.5">Quạt chạy tốc độ tối đa</p>
+                            </div>
+                            <span id="badge-high" class="px-2 py-0.5 bg-red-100 text-red-700 text-xs font-bold rounded-full border border-red-200">● Chờ</span>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4 mb-3">
+                            <div>
+                                <p class="text-xs font-bold text-slate-500 mb-1.5">Dải nhiệt độ</p>
+                                <div class="flex items-center gap-2">
+                                    <input type="number" id="high-min" value="32" class="thresh-input" style="border-color:#fecdd3; background:#fef2f2; width:56px;" readonly>
+                                    <span class="text-xs text-slate-400">— 50°C</span>
+                                </div>
+                                <p class="text-xs text-red-400 font-semibold mt-1">* Min tự động = Max mức Trung bình</p>
+                            </div>
+                            <div>
+                                <p class="text-xs font-bold text-slate-500 mb-1.5">Tốc độ quạt</p>
+                                <div class="flex items-center gap-2">
+                                    <input type="number" id="high-rpm" value="100" min="0" max="100" class="thresh-input" style="border-color:#fecdd3;" oninput="document.getElementById('high-rpm-slider').value=this.value; updateSettings()">
+                                    <span class="text-xs text-red-500 font-bold">RPM</span>
+                                </div>
+                            </div>
+                        </div>
+                        <input type="range" id="high-rpm-slider" min="0" max="100" value="100" class="rpm-mini-range range-high" style="background:#fee2e2;"
+                            oninput="document.getElementById('high-rpm').value=this.value; updateSettings()">
+                        <div class="flex justify-between text-xs font-bold mt-1 text-red-400">
+                            <span>0</span><span id="high-rpm-disp" class="text-red-600">100 RPM</span><span>100</span>
+                        </div>
+                    </div>
+
+                    <!-- Nút hành động -->
+                    <div class="flex gap-3 pb-4">
+                        <button onclick="resetSettings()" class="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition-all active:scale-95">
+                            <i class="fas fa-undo mr-2"></i> Reset mặc định
+                        </button>
+                        <button onclick="saveSettings()" class="flex-1 py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-xl shadow-md transition-all active:scale-95">
+                            <i class="fas fa-save mr-2"></i> Lưu cài đặt
+                        </button>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- ══ TRANG CHÍNH (CAMERA + PANEL) ══ -->
+            <div id="page-main" class="grid grid-cols-1 lg:grid-cols-3 gap-3 md:gap-4 h-full">
+
+                <!-- CAMERA + PTZ -->
+                <div class="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden flex flex-col min-h-0">
+                    <div class="px-4 py-3 flex items-center justify-between bg-slate-800">
+                        <div class="flex items-center gap-3">
+                            <span class="live-dot w-2.5 h-2.5 rounded-full bg-red-500 inline-block"></span>
+                            <span class="text-white font-bold text-sm tracking-wide">CAM-01 · C6N</span>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <span id="cam-status" class="px-2.5 py-1 bg-emerald-500/20 text-emerald-400 text-xs font-bold rounded-md border border-emerald-500/30">AI OFF</span>
+                            <span class="text-slate-400 font-mono text-xs" id="cam-clock">00:00:00</span>
+                        </div>
+                    </div>
+                    <div class="relative flex-1 cam-scanline min-h-0" style="background: #0f172a;">
+                        <video id="cam-video" class="w-full h-full object-cover absolute inset-0 z-0" autoplay muted playsinline></video>
+                        <div id="cam-loading" class="absolute inset-0 z-10 flex flex-col items-center justify-center bg-slate-900 text-slate-500">
+                            <i class="fas fa-circle-notch fa-spin text-2xl mb-2 text-emerald-500"></i>
+                            <p class="text-xs font-medium">Đang kết nối camera...</p>
+                        </div>
+                        <div class="absolute top-3 left-3 z-20 flex items-center gap-1.5 bg-black/40 backdrop-blur-sm px-2.5 py-1 rounded-lg border border-white/10">
+                            <i class="fas fa-map-marker-alt text-emerald-400 text-xs"></i>
+                            <span class="text-white text-xs font-medium">Phòng Lab</span>
+                        </div>
+                        <div id="people-overlay" class="absolute top-3 right-3 z-20 hidden items-center gap-1.5 bg-black/40 backdrop-blur-sm px-2.5 py-1 rounded-lg border border-white/10">
+                            <i class="fas fa-users text-purple-400 text-xs"></i>
+                            <span class="text-white text-xs font-medium" id="people-count-overlay">0 người</span>
+                        </div>
+                        <div id="temp-overlay" class="absolute bottom-16 right-3 z-20 hidden items-center gap-1.5 bg-black/40 backdrop-blur-sm px-2.5 py-1 rounded-lg border border-white/10">
+                            <i class="fas fa-thermometer-half text-red-400 text-xs"></i>
+                            <span class="text-white text-xs font-medium" id="temp-overlay-val">— °C</span>
+                        </div>
+                        <div class="absolute bottom-0 left-0 right-0 h-12 z-10 pointer-events-none"
+                             style="background: linear-gradient(to top, rgba(0,0,0,0.5), transparent);"></div>
+                    </div>
+
+                    <!-- PTZ -->
+                    <div class="px-4 md:px-6 py-4 bg-slate-800 flex items-center justify-between gap-4">
+                        <div>
+                            <p class="text-slate-300 font-semibold text-sm">Điều hướng PTZ</p>
+                            <p class="text-slate-500 text-xs mt-0.5">Nhấn giữ để xoay · thả để dừng</p>
+                            <div id="ptz-status" class="mt-1.5 text-xs font-bold text-slate-500">● Chờ lệnh</div>
+                        </div>
+                        <div class="relative w-28 h-28 rounded-full flex items-center justify-center flex-shrink-0"
+                             style="background: radial-gradient(circle, #1e293b, #0f172a); border: 1px solid #334155; box-shadow: inset 0 2px 8px rgba(0,0,0,0.5);">
+                            <button id="ptz-UP" class="ptz-btn ptz-dark absolute top-1 w-9 h-9 rounded-full transition-all select-none flex items-center justify-center"
+                                onmousedown="ptzPress('UP')" onmouseup="ptzRelease()" onmouseleave="ptzRelease()" ontouchstart="ptzTouch(event,'UP')" ontouchend="ptzRelease()">
+                                <i class="fas fa-chevron-up text-xs pointer-events-none"></i>
+                            </button>
+                            <button id="ptz-DOWN" class="ptz-btn ptz-dark absolute bottom-1 w-9 h-9 rounded-full transition-all select-none flex items-center justify-center"
+                                onmousedown="ptzPress('DOWN')" onmouseup="ptzRelease()" onmouseleave="ptzRelease()" ontouchstart="ptzTouch(event,'DOWN')" ontouchend="ptzRelease()">
+                                <i class="fas fa-chevron-down text-xs pointer-events-none"></i>
+                            </button>
+                            <button id="ptz-LEFT" class="ptz-btn ptz-dark absolute left-1 w-9 h-9 rounded-full transition-all select-none flex items-center justify-center"
+                                onmousedown="ptzPress('LEFT')" onmouseup="ptzRelease()" onmouseleave="ptzRelease()" ontouchstart="ptzTouch(event,'LEFT')" ontouchend="ptzRelease()">
+                                <i class="fas fa-chevron-left text-xs pointer-events-none"></i>
+                            </button>
+                            <button id="ptz-RIGHT" class="ptz-btn ptz-dark absolute right-1 w-9 h-9 rounded-full transition-all select-none flex items-center justify-center"
+                                onmousedown="ptzPress('RIGHT')" onmouseup="ptzRelease()" onmouseleave="ptzRelease()" ontouchstart="ptzTouch(event,'RIGHT')" ontouchend="ptzRelease()">
+                                <i class="fas fa-chevron-right text-xs pointer-events-none"></i>
+                            </button>
+                            <div class="w-5 h-5 rounded-full" style="background:#334155;"></div>
+                        </div>
+                        <div class="hidden md:flex flex-col gap-2 text-xs text-slate-500">
+                            <div class="flex items-center gap-2"><i class="fas fa-sync-alt text-emerald-500"></i><span>Auto scan: 5 phút/lần</span></div>
+                            <div class="flex items-center gap-2"><i class="fas fa-tachometer-alt text-blue-400"></i><span>Tốc độ: 2/7</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ══ CONTROL PANEL ══ -->
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 md:p-5 flex flex-col min-h-0 overflow-y-auto">
+                    <h3 class="font-bold text-slate-700 mb-5 pb-4 border-b border-slate-100" id="panel-title">Bảng điều khiển</h3>
+
+                    <!-- ── MANUAL ── -->
+                    <div id="panel-Manual" class="flex-1 flex flex-col">
+                        <p class="text-sm text-slate-500 mb-4">Bạn đang toàn quyền kiểm soát tốc độ quạt.</p>
+                        <div class="flex gap-3 mb-5">
+                            <button onclick="fanOn()"
+                                class="flex-1 py-4 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-xl shadow-md transition-all active:scale-95">
+                                <i class="fas fa-power-off mr-2"></i> BẬT QUẠT
+                            </button>
+                            <button onclick="fanOff()"
+                                class="flex-1 py-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition-all active:scale-95">
+                                <i class="fas fa-ban mr-2"></i> TẮT QUẠT
+                            </button>
+                        </div>
+                        <div class="mb-4">
+                            <div class="flex items-center justify-between mb-2">
+                                <label class="font-bold text-slate-700 text-sm">Tốc độ (RPM)</label>
+                                <span id="fan-state-badge" class="fan-state off">
+                                    <i class="fas fa-circle" style="font-size:7px"></i> Dừng
+                                </span>
+                            </div>
+                            <input type="range" id="rpm-slider" min="0" max="100" value="0" step="1"
+                                class="rpm-range"
+                                oninput="previewRPM(this.value)"
+                                onchange="applyRPM(this.value)">
+                            <div class="flex justify-between text-xs text-slate-400 font-bold mt-1">
+                                <span>0</span><span>50</span><span>100 RPM</span>
+                            </div>
+                            <p class="text-xs text-slate-400 mt-2 text-right" id="disp-hw">Biến tần: — Hz</p>
+                        </div>
+
+                        <!-- MINI CARDS -->
+                        <div class="mt-2 space-y-2 pt-3 border-t border-slate-100">
+                            <div class="mini-card">
+                                <div>
+                                    <p class="text-xs font-semibold text-slate-500 mb-0.5">TỔNG NĂNG LƯỢNG</p>
+                                    <p class="text-base font-black text-slate-800">1.250 <span class="text-xs text-slate-400 font-medium">kWh</span></p>
+                                </div>
+                                <div class="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-500 flex items-center justify-center">
+                                    <i class="fas fa-chart-bar text-sm"></i>
+                                </div>
+                            </div>
+                            <div class="mini-card">
+                                <div>
+                                    <p class="text-xs font-semibold text-slate-500 mb-0.5">TỐC ĐỘ QUẠT</p>
+                                    <p class="text-base font-black text-slate-800" id="panel-speed">—</p>
+                                </div>
+                                <div class="w-9 h-9 rounded-xl bg-blue-50 text-blue-500 flex items-center justify-center">
+                                    <i class="fas fa-fan text-sm" id="panel-fan-icon"></i>
+                                </div>
+                            </div>
+                            <div class="mini-card">
+                                <div>
+                                    <p class="text-xs font-semibold text-slate-500 mb-0.5">NHIỆT ĐỘ</p>
+                                    <p class="text-base font-black text-slate-800">
+                                        <span id="panel-temp">—</span>
+                                        <span class="text-xs text-slate-400 font-medium" id="panel-temp-unit"></span>
+                                    </p>
+                                    <p class="text-xs font-semibold" id="panel-temp-level" style="color:#94a3b8">—</p>
+                                </div>
+                                <div class="w-9 h-9 rounded-xl bg-red-50 flex items-center justify-center">
+                                    <i class="fas fa-thermometer-half text-sm" id="panel-temp-icon" style="color:#f87171"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ── ECO ── -->
+                    <div id="panel-Eco" class="flex-1 flex flex-col" style="display:none;">
+                        <div class="flex items-center justify-between mb-4">
+                            <p class="text-sm text-slate-500">Cài đặt lịch trình hoạt động tiết kiệm điện.</p>
+                            <div class="relative">
+                                <button onclick="toggleRepeatMenu()" class="w-8 h-8 rounded-lg bg-slate-100 hover:bg-emerald-50 hover:text-emerald-600 text-slate-500 flex items-center justify-center transition">
+                                    <i class="fas fa-bars text-sm"></i>
+                                </button>
+                                <!-- Dropdown -->
+                                <div id="repeat-menu" class="hidden absolute right-0 top-10 w-56 bg-white rounded-2xl shadow-xl border border-slate-100 p-3 z-50">
+                                    <p class="text-xs font-black text-slate-500 uppercase tracking-wide mb-2 px-1">Chế độ lặp lại</p>
+
+                                    <label class="flex items-center gap-2 px-2 py-2 rounded-xl hover:bg-slate-50 cursor-pointer">
+                                        <input type="radio" name="repeat-mode" value="once" class="accent-emerald-500" onchange="setRepeatMode('once')" checked>
+                                        <span class="text-sm font-semibold text-slate-700">1 lần</span>
+                                    </label>
+
+                                    <label class="flex items-center gap-2 px-2 py-2 rounded-xl hover:bg-slate-50 cursor-pointer">
+                                        <input type="radio" name="repeat-mode" value="daily" class="accent-emerald-500" onchange="setRepeatMode('daily')">
+                                        <span class="text-sm font-semibold text-slate-700">Hằng ngày</span>
+                                    </label>
+
+                                    <label class="flex items-center gap-2 px-2 py-2 rounded-xl hover:bg-slate-50 cursor-pointer">
+                                        <input type="radio" name="repeat-mode" value="custom" class="accent-emerald-500" onchange="setRepeatMode('custom')">
+                                        <span class="text-sm font-semibold text-slate-700">Tùy chọn ngày</span>
+                                    </label>
+
+                                    <!-- Checkbox các ngày -->
+                                    <div id="repeat-days" class="hidden mt-2 px-1">
+                                        <div class="flex flex-wrap gap-1.5">
+                                            <label class="repeat-day-btn"><input type="checkbox" value="mon" class="hidden"><span>T2</span></label>
+                                            <label class="repeat-day-btn"><input type="checkbox" value="tue" class="hidden"><span>T3</span></label>
+                                            <label class="repeat-day-btn"><input type="checkbox" value="wed" class="hidden"><span>T4</span></label>
+                                            <label class="repeat-day-btn"><input type="checkbox" value="thu" class="hidden"><span>T5</span></label>
+                                            <label class="repeat-day-btn"><input type="checkbox" value="fri" class="hidden"><span>T6</span></label>
+                                            <label class="repeat-day-btn"><input type="checkbox" value="sat" class="hidden"><span>T7</span></label>
+                                            <label class="repeat-day-btn"><input type="checkbox" value="sun" class="hidden"><span>CN</span></label>
+                                        </div>
+                                    </div>
+
+                                    <!-- Badge hiện chế độ đang chọn -->
+                                    <div class="mt-2 pt-2 border-t border-slate-100">
+                                        <span id="repeat-summary" class="text-xs font-bold text-emerald-600">
+                                            <i class="fas fa-redo mr-1"></i> 1 lần
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="space-y-3 mb-4">
+                            <div class="p-4 bg-slate-50 rounded-xl border border-slate-100">
+                                <label class="text-xs font-bold text-slate-500 uppercase block mb-2">Giờ bật</label>
+                                <div class="flex gap-2">
+                                    <select id="s-h" class="flex-1 bg-white border border-slate-200 p-2 rounded-lg outline-none"></select>
+                                    <span class="font-bold text-slate-400 self-center">:</span>
+                                    <select id="s-m" class="flex-1 bg-white border border-slate-200 p-2 rounded-lg outline-none"></select>
+                                    <select id="s-ap" class="flex-1 bg-emerald-50 border border-emerald-100 text-emerald-700 font-bold p-2 rounded-lg outline-none">
+                                        <option>AM</option><option>PM</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="p-4 bg-slate-50 rounded-xl border border-slate-100">
+                                <label class="text-xs font-bold text-slate-500 uppercase block mb-2">Giờ tắt</label>
+                                <div class="flex gap-2">
+                                    <select id="e-h" class="flex-1 bg-white border border-slate-200 p-2 rounded-lg outline-none"></select>
+                                    <span class="font-bold text-slate-400 self-center">:</span>
+                                    <select id="e-m" class="flex-1 bg-white border border-slate-200 p-2 rounded-lg outline-none"></select>
+                                    <select id="e-ap" class="flex-1 bg-emerald-50 border border-emerald-100 text-emerald-700 font-bold p-2 rounded-lg outline-none">
+                                        <option>AM</option><option>PM</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Thông báo đã lưu -->
+                        <div id="eco-save-msg" class="items-center justify-center gap-2 px-4 py-2 bg-emerald-50 border border-emerald-200 rounded-xl mb-2 transition-all" style="display:none;">
+                            <i class="fas fa-check-circle text-emerald-500"></i>
+                            <span class="text-emerald-700 text-sm font-bold">Thành Công!</span>
+                        </div>
+
+                        <!-- NÚT LƯU LỊCH TRÌNH — chỉ cho giờ bật/tắt -->
+
+                        <button onclick="saveEco()" class="w-full py-3 bg-green-500 hover:bg-green-600 text-white font-bold rounded-xl shadow-md transition-all active:scale-95 mb-3">
+                            <i class="fas fa-check-circle mr-2"></i> LƯU LỊCH TRÌNH
+                        </button>
+                        <div class="flex gap-3">
+                            <button onclick="saveEco()" class="flex-1 py-3 bg-green-500 hover:bg-green-600 text-white font-bold rounded-xl shadow-md transition-all active:scale-95">
+                                <i class="fas fa-check-circle mr-2"></i> LƯU LỊCH TRÌNH
+                            </button>
+                            <button onclick="cancelEco()" class="flex-1 py-3 bg-red-100 hover:bg-red-200 text-red-600 font-bold rounded-xl transition-all active:scale-95">
+                                <i class="fas fa-times-circle mr-2"></i> HỦY LỊCH TRÌNH
+                            </button>
+                        </div>
+
+                        <!-- HẸN GIỜ TẮT QUẠT -->
+                        <div class="p-4 bg-slate-50 rounded-xl border border-slate-100 mb-3">
+                            <div class="flex items-center justify-between mb-3">
+                                <div class="flex items-center gap-2">
+                                    <div class="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-600 flex items-center justify-center">
+                                        <i class="fas fa-hourglass-half text-sm"></i>
+                                    </div>
+                                    <div>
+                                        <p class="font-black text-slate-700 text-sm">Hẹn giờ tắt quạt</p>
+                                        <p class="text-xs text-slate-400">Tự động tắt sau khoảng thời gian</p>
+                                    </div>
+                                </div>
+                                <span id="timer-badge" class="timer-badge waiting">
+                                    <i class="fas fa-circle" style="font-size:7px"></i> Chờ
+                                </span>
+                            </div>
+                            <!-- Ô nhập giờ/phút/giây -->
+                            <div class="flex items-center justify-center gap-3 mb-4">
+                                <div class="flex flex-col items-center gap-1">
+                                    <button onclick="adjustTimer('h',1)" class="w-8 h-6 rounded-lg bg-slate-200 hover:bg-emerald-100 text-slate-600 hover:text-emerald-600 font-black text-sm transition">+</button>
+                                    <input type="number" id="timer-h" value="0" min="0" max="23" class="timer-input">
+                                    <button onclick="adjustTimer('h',-1)" class="w-8 h-6 rounded-lg bg-slate-200 hover:bg-red-100 text-slate-600 hover:text-red-500 font-black text-sm transition">−</button>
+                                    <span class="text-xs text-slate-400 font-bold">GIỜ</span>
+                                </div>
+                                <span class="text-2xl font-black text-slate-300 mb-4">:</span>
+                                <div class="flex flex-col items-center gap-1">
+                                    <button onclick="adjustTimer('m',1)" class="w-8 h-6 rounded-lg bg-slate-200 hover:bg-emerald-100 text-slate-600 hover:text-emerald-600 font-black text-sm transition">+</button>
+                                    <input type="number" id="timer-m" value="0" min="0" max="59" class="timer-input">
+                                    <button onclick="adjustTimer('m',-1)" class="w-8 h-6 rounded-lg bg-slate-200 hover:bg-red-100 text-slate-600 hover:text-red-500 font-black text-sm transition">−</button>
+                                    <span class="text-xs text-slate-400 font-bold">PHÚT</span>
+                                </div>
+                                <span class="text-2xl font-black text-slate-300 mb-4">:</span>
+                                <div class="flex flex-col items-center gap-1">
+                                    <button onclick="adjustTimer('s',1)" class="w-8 h-6 rounded-lg bg-slate-200 hover:bg-emerald-100 text-slate-600 hover:text-emerald-600 font-black text-sm transition">+</button>
+                                    <input type="number" id="timer-s" value="0" min="0" max="59" class="timer-input">
+                                    <button onclick="adjustTimer('s',-1)" class="w-8 h-6 rounded-lg bg-slate-200 hover:bg-red-100 text-slate-600 hover:text-red-500 font-black text-sm transition">−</button>
+                                    <span class="text-xs text-slate-400 font-bold">GIÂY</span>
+                                </div>
+                            </div>
+
+                            <!-- Hiển thị đếm ngược -->
+                            <div id="timer-display" class="text-center mb-3 hidden">
+                                <div class="text-3xl font-black text-emerald-600 font-mono tracking-widest" id="timer-countdown">00:00:00</div>
+                                <p class="text-xs text-slate-400 font-semibold mt-1" id="timer-remain-text">còn lại</p>
+                            </div>
+
+                            <!-- Progress bar — chỉ hiện khi đang đếm -->
+                            <div class="timer-progress mb-3" id="timer-progress-wrap" style="display:none;">
+                                <div class="timer-progress-bar" id="timer-progress-bar" style="width:100%"></div>
+                            </div>
+
+                            <!-- Nút điều khiển -->
+                            <div class="flex gap-2 mt-3 mb-1">
+                                <button onclick="startTimer()" id="btn-timer-start"
+                                    class="flex-1 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-xl text-sm transition-all active:scale-95">
+                                    <i class="fas fa-play mr-1"></i> Bắt đầu
+                                </button>
+                                <button onclick="cancelTimer()" id="btn-timer-cancel"
+                                    class="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-xl text-sm transition-all active:scale-95" disabled>
+                                    <i class="fas fa-stop mr-1"></i> Huỷ
+                                </button>
+                            </div>
+
+                            
+                            
+                            <!-- MINI CARDS ECO -->
+                            <div class="space-y-2 mb-4 pt-3 border-t border-slate-100">
+                                <div class="mini-card">
+                                    <div>
+                                        <p class="text-xs font-semibold text-slate-500 mb-0.5">TỔNG NĂNG LƯỢNG</p>
+                                        <p class="text-base font-black text-slate-800">1.250 <span class="text-xs text-slate-400 font-medium">kWh</span></p>
+                                    </div>
+                                    <div class="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-500 flex items-center justify-center">
+                                        <i class="fas fa-chart-bar text-sm"></i>
+                                    </div>
+                                </div>
+                                <div class="mini-card">
+                                    <div>
+                                        <p class="text-xs font-semibold text-slate-500 mb-0.5">TỐC ĐỘ QUẠT</p>
+                                        <p class="text-base font-black text-slate-800" id="panel-speed-eco">—</p>
+                                    </div>
+                                    <div class="w-9 h-9 rounded-xl bg-blue-50 text-blue-500 flex items-center justify-center">
+                                        <i class="fas fa-fan text-sm"></i>
+                                    </div>
+                                </div>
+                                <div class="mini-card">
+                                    <div>
+                                        <p class="text-xs font-semibold text-slate-500 mb-0.5">NHIỆT ĐỘ</p>
+                                        <p class="text-base font-black text-slate-800">
+                                            <span id="panel-temp-eco">—</span>
+                                            <span class="text-xs text-slate-400 font-medium" id="panel-temp-unit-eco"></span>
+                                        </p>
+                                    </div>
+                                    <div class="w-9 h-9 rounded-xl bg-red-50 flex items-center justify-center">
+                                        <i class="fas fa-thermometer-half text-sm" style="color:#f87171"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ── SMART ── -->
+                    <div id="panel-Smart" class="flex-1 flex flex-col justify-center items-center text-center" style="display:none;">
+                        <div class="w-20 h-20 md:w-24 md:h-24 bg-purple-100 rounded-full flex items-center justify-center mb-5">
+                            <i class="fas fa-robot text-4xl md:text-5xl text-purple-500"></i>
+                        </div>
+                        <h4 class="font-bold text-lg text-slate-800">AI đang điều khiển</h4>
+                        <p class="text-sm text-slate-500 mt-2 mb-6">Hệ thống đang sử dụng Camera nhận diện (YOLO) để tính toán số người và điều chỉnh tốc độ tự động.</p>
+                        <div class="w-full bg-slate-50 rounded-xl border border-slate-100 p-4 mb-4 text-left">
+                            <div class="flex justify-between text-xs font-bold text-slate-500 mb-1">
+                                <span>TỐC ĐỘ HIỆN TẠI</span>
+                                <span id="smart-people-lbl">— người</span>
+                            </div>
+                            <div class="flex items-end gap-2">
+                                <span class="text-2xl font-black text-purple-600" id="smart-rpm-disp">—</span>
+                                <span class="text-slate-400 font-bold mb-0.5">RPM</span>
+                                <span class="text-slate-400 text-sm mb-0.5" id="smart-hz-disp"></span>
+                            </div>
+                        </div>
+                        <div class="w-full bg-red-50 rounded-xl border border-red-100 p-4 mb-4 text-left">
+                            <div class="flex justify-between text-xs font-bold text-slate-500 mb-1">
+                                <span>NHIỆT ĐỘ MÔI TRƯỜNG</span>
+                                <span id="smart-temp-level" class="text-red-400">—</span>
+                            </div>
+                            <div class="flex items-end gap-2">
+                                <span class="text-2xl font-black text-red-500" id="smart-temp-disp">—</span>
+                                <span class="text-slate-400 font-bold mb-0.5">°C</span>
+                            </div>
+                        </div>
+
+                        <!-- MINI CARD SMART -->
+                        <div class="mini-card w-full mb-4">
+                            <div>
+                                <p class="text-xs font-semibold text-slate-500 mb-0.5">TỔNG NĂNG LƯỢNG</p>
+                                <p class="text-base font-black text-slate-800">1.250 <span class="text-xs text-slate-400 font-medium">kWh</span></p>
+                            </div>
+                            <div class="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-500 flex items-center justify-center">
+                                <i class="fas fa-chart-bar text-sm"></i>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-2 text-emerald-500 font-medium px-4 py-2 bg-emerald-50 rounded-full">
+                            <i class="fas fa-circle text-[8px] animate-pulse"></i> Model YOLOv8 Active
+                        </div>
+                    </div>
+
+                </div>
+            </div><!-- end page-main -->
+        </div>
+    </main>
+
+    <script>
+    const USER_ROLE = "{{ role }}";
+    // ── ĐỒNG HỒ ──────────────────────────────────────────
+    function updateTime() {
+        const now = new Date();
+        document.getElementById('header-date').innerText = now.toLocaleDateString('vi-VN',{day:'2-digit',month:'2-digit',year:'numeric'});
+        document.getElementById('cam-clock').innerText   = now.toLocaleTimeString('en-US',{hour12:false});
+        setTimeout(updateTime, 1000);
+    }
+
+    // ── ĐIỀU HƯỚNG TRANG ─────────────────────────────────
+    function openHome() {
+        document.getElementById('page-history').style.display = 'none';
+        document.getElementById('page-report').style.display = 'none';
+        document.getElementById('page-home').style.display = 'block';
+        document.getElementById('page-main').style.display = 'none';
+        document.getElementById('page-settings').style.display = 'none';
+        document.querySelectorAll('#sidebar nav a').forEach(a => {
+            a.className = 'flex items-center gap-3 px-4 py-3 text-slate-500 hover:bg-slate-50 hover:text-slate-700 rounded-xl font-medium transition';
+        });
+        document.querySelector('#sidebar nav a:first-child').className =
+            'flex items-center gap-3 px-4 py-3 bg-emerald-50 text-emerald-700 rounded-xl font-semibold';
+    }
+
+    function openMain() {
+        document.getElementById('page-history').style.display = 'none';
+        document.getElementById('page-report').style.display = 'none';
+        document.getElementById('page-home').style.display = 'none';
+        document.getElementById('page-main').style.display = 'grid';
+        document.getElementById('page-settings').style.display = 'none';
+    }
+
+    function openSettings() {
+        document.getElementById('page-history').style.display = 'none';
+        document.getElementById('page-report').style.display = 'none';
+
+        document.getElementById('page-home').style.display = 'none';
+        document.getElementById('page-main').style.display = 'none';
+        document.getElementById('page-settings').style.display = 'block';
+        document.querySelectorAll('#sidebar nav a').forEach(a => {
+            a.className = 'flex items-center gap-3 px-4 py-3 text-slate-500 hover:bg-slate-50 hover:text-slate-700 rounded-xl font-medium transition';
+        });
+        document.querySelectorAll('#sidebar nav a')[1].className =
+            'flex items-center gap-3 px-4 py-3 bg-orange-50 text-orange-600 rounded-xl font-semibold';
+        updateSettings();
+    }
+
+    // ── NGƯỠNG NHIỆT ─────────────────────────────────────
+    const DEFAULT_SETTINGS = { lowMax:25, midMax:32, lowRpm:30, midRpm:60, highRpm:100 };
+
+    function updateSettings() {
+        const lowMax  = parseInt(document.getElementById('low-max').value)  || 0;
+        const midMax  = parseInt(document.getElementById('mid-max').value)  || 0;
+        const lowRpm  = parseInt(document.getElementById('low-rpm').value)  || 0;
+        const midRpm  = parseInt(document.getElementById('mid-rpm').value)  || 0;
+        const highRpm = parseInt(document.getElementById('high-rpm').value) || 0;
+
+        // Sync min readonly
+        document.getElementById('mid-min').value  = lowMax;
+        document.getElementById('high-min').value = midMax;
+
+        // Sync slider
+        document.getElementById('low-rpm-slider').value  = lowRpm;
+        document.getElementById('mid-rpm-slider').value  = midRpm;
+        document.getElementById('high-rpm-slider').value = highRpm;
+
+        // Hiện RPM disp
+        document.getElementById('low-rpm-disp').innerText  = lowRpm  + ' RPM';
+        document.getElementById('mid-rpm-disp').innerText  = midRpm  + ' RPM';
+        document.getElementById('high-rpm-disp').innerText = highRpm + ' RPM';
+
+        // Label thanh nhiệt
+        document.getElementById('ind-low-label').innerText = lowMax + '°C';
+        document.getElementById('ind-mid-label').innerText = midMax + '°C';
+
+        // Cập nhật active zone nếu có nhiệt độ
+        const curTemp = parseFloat(document.getElementById('settings-temp-val').innerText);
+        if (!isNaN(curTemp)) highlightZone(curTemp, lowMax, midMax);
+    }
+
+    function highlightZone(temp, lowMax, midMax) {
+        // Reset tất cả
+        document.getElementById('card-low').classList.remove('active-zone');
+        document.getElementById('card-mid').classList.remove('active-zone');
+        document.getElementById('card-high').classList.remove('active-zone');
+        document.getElementById('badge-low').innerText  = '● Chờ';
+        document.getElementById('badge-low').className  = 'px-2 py-0.5 bg-blue-100 text-blue-700 text-xs font-bold rounded-full border border-blue-200';
+        document.getElementById('badge-mid').innerText  = '● Chờ';
+        document.getElementById('badge-mid').className  = 'px-2 py-0.5 bg-amber-100 text-amber-700 text-xs font-bold rounded-full border border-amber-200';
+        document.getElementById('badge-high').innerText = '● Chờ';
+        document.getElementById('badge-high').className = 'px-2 py-0.5 bg-red-100 text-red-700 text-xs font-bold rounded-full border border-red-200';
+
+        // Active đúng mức
+        let zone = temp < lowMax ? 'low' : temp < midMax ? 'mid' : 'high';
+        document.getElementById('card-' + zone).classList.add('active-zone');
+        const badge = document.getElementById('badge-' + zone);
+        badge.innerText = '● Đang active';
+        if (zone === 'low')  badge.className = 'px-2 py-0.5 bg-blue-500 text-white text-xs font-bold rounded-full';
+        if (zone === 'mid')  badge.className = 'px-2 py-0.5 bg-amber-500 text-white text-xs font-bold rounded-full';
+        if (zone === 'high') badge.className = 'px-2 py-0.5 bg-red-500 text-white text-xs font-bold rounded-full';
+    }
+
+    function updateSettingsTemp(temp) {
+        if (temp === null || temp === undefined) return;
+        const t = parseFloat(temp);
+        const lowMax = parseInt(document.getElementById('low-max').value) || 25;
+        const midMax = parseInt(document.getElementById('mid-max').value) || 32;
+
+        const el    = document.getElementById('settings-temp-val');
+        const badge = document.getElementById('settings-temp-badge');
+        const bg    = document.getElementById('settings-temp-bg');
+        const icon  = document.getElementById('settings-temp-icon');
+        const ind   = document.getElementById('temp-indicator');
+        if (!el) return;
+
+        el.innerText = t.toFixed(1);
+
+        // Kim chỉ vị trí (0–50°C)
+        const pct = Math.min(Math.max((t / 50) * 100, 2), 97);
+        if (ind) ind.style.left = pct + '%';
+
+        if (t < lowMax) {
+                el.style.color = '#3b82f6';
+                badge.innerText = 'Thấp';
+                badge.className = 'inline-block mt-1 px-3 py-0.5 bg-blue-50 text-blue-600 text-xs font-bold rounded-full border border-blue-100';
+                bg.style.background = '#eff6ff'; icon.style.color = '#3b82f6';
+            } else if (t < midMax) {
+                el.style.color = '#f59e0b';
+                badge.innerText = 'Trung bình';
+                badge.className = 'inline-block mt-1 px-3 py-0.5 bg-amber-50 text-amber-600 text-xs font-bold rounded-full border border-amber-100';
+                bg.style.background = '#fffbeb'; icon.style.color = '#f59e0b';
+            } else {
+                el.style.color = '#ef4444';
+                badge.innerText = 'Cao';
+                badge.className = 'inline-block mt-1 px-3 py-0.5 bg-red-50 text-red-600 text-xs font-bold rounded-full border border-red-100';
+                bg.style.background = '#fff1f2'; icon.style.color = '#ef4444';
+            }
+            highlightZone(t, lowMax, midMax);
+    }
+
+    function resetSettings() {
+        document.getElementById('low-max').value  = DEFAULT_SETTINGS.lowMax;
+        document.getElementById('mid-max').value  = DEFAULT_SETTINGS.midMax;
+        document.getElementById('low-rpm').value  = DEFAULT_SETTINGS.lowRpm;
+        document.getElementById('mid-rpm').value  = DEFAULT_SETTINGS.midRpm;
+        document.getElementById('high-rpm').value = DEFAULT_SETTINGS.highRpm;
+        updateSettings();
+    }
+
+    async function saveSettings() {
+        if (USER_ROLE !== 'admin') { alert('⚠️ Bạn chỉ có quyền xem!'); return; }
+        const payload = {
+            low_max  : parseInt(document.getElementById('low-max').value),
+            mid_max  : parseInt(document.getElementById('mid-max').value),
+            low_rpm  : parseInt(document.getElementById('low-rpm').value),
+            mid_rpm  : parseInt(document.getElementById('mid-rpm').value),
+            high_rpm : parseInt(document.getElementById('high-rpm').value),
+        };
+        try {
+            await fetch('/settings/temp_threshold', {
+                method:'POST', headers:{'Content-Type':'application/json'},
+                body: JSON.stringify(payload)
+            });
+            const btn = document.querySelector('#page-settings button.bg-emerald-500');
+            btn.innerHTML = '<i class="fas fa-check mr-2"></i> Đã lưu!';
+            btn.classList.replace('bg-emerald-500','bg-green-600');
+            setTimeout(() => {
+                btn.innerHTML = '<i class="fas fa-save mr-2"></i> Lưu cài đặt';
+                    btn.classList.replace('bg-green-600','bg-emerald-500');
+                }, 2000);
+            } catch(e) {}
+    }
+
+    // ── STREAM ────────────────────────────────────────────
+    async function startHLSStream() {
+        try {
+            const isLocal = location.hostname==='127.0.0.1'||location.hostname==='localhost'||location.hostname.startsWith('192.168.');
+            const videoEl = document.getElementById('cam-video');
+            const loading = document.getElementById('cam-loading');
+            if (isLocal) {
+                const img = document.createElement('img');
+                img.id='cam-img'; img.src='/video_feed';
+                img.className='w-full h-full object-cover absolute inset-0 z-0';
+                img.onload=()=>{loading.style.display='none';};
+                videoEl.replaceWith(img);
+            } else {
+                const res=await fetch('/get_stream_url'); const data=await res.json();
+                videoEl.addEventListener('playing',()=>{loading.style.display='none';});
+                if(Hls.isSupported()){const hls=new Hls({lowLatencyMode:true});hls.loadSource(data.url);hls.attachMedia(videoEl);}
+                else{videoEl.src=data.url;videoEl.play();}
+            }
+        } catch(err) {
+            document.getElementById('cam-loading').innerHTML='<i class="fas fa-exclamation-circle text-red-400 text-xl mb-1"></i><p class="text-xs text-red-400">Không thể kết nối camera</p>';
+        }
+    }
+
+    // ── PTZ ───────────────────────────────────────────────
+    let currentPTZ = null;
+    function sendPTZ(dir){return fetch('/ptz',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({direction:dir})}).catch(e=>console.error(e));}
+    function setStatus(text,cls){const el=document.getElementById('ptz-status');el.innerText=text;el.className=`mt-1.5 text-xs font-bold ${cls}`;}
+    function ptzPress(dir){if(currentPTZ===dir)return;currentPTZ=dir;document.querySelectorAll('.ptz-btn').forEach(b=>b.classList.remove('active'));document.getElementById('ptz-'+dir)?.classList.add('active');setStatus('● Đang xoay '+dir,'text-emerald-400');sendPTZ(dir);}
+    function ptzRelease(){if(!currentPTZ)return;currentPTZ=null;document.querySelectorAll('.ptz-btn').forEach(b=>b.classList.remove('active'));setStatus('● Chờ lệnh','text-slate-500');sendPTZ('STOP');}
+    function ptzTouch(e,dir){e.preventDefault();ptzPress(dir);}
+
+    // ── ECO ───────────────────────────────────────────────
+    function generateTimeOptions(){
+        ['s-h','e-h'].forEach(id=>{const el=document.getElementById(id);el.innerHTML='';for(let i=1;i<=12;i++){let v=i<10?'0'+i:i;el.innerHTML+=`<option>${v}</option>`;}});
+        ['s-m','e-m'].forEach(id=>{const el=document.getElementById(id);el.innerHTML='';for(let i=0;i<=59;i++){let v=i<10?'0'+i:i;el.innerHTML+=`<option>${v}</option>`;}});
+    }
+
+    async function saveEco() {
+        if (USER_ROLE !== 'admin') { alert('⚠️ Bạn chỉ có quyền xem!'); return; }
+        try {
+            await fetch('/eco/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+                start_h:document.getElementById('s-h').value, start_m:document.getElementById('s-m').value, start_ap:document.getElementById('s-ap').value,
+                stop_h:document.getElementById('e-h').value,  stop_m:document.getElementById('e-m').value,  stop_ap:document.getElementById('e-ap').value, rpm:60
+            })});
+
+            // Hiện thông báo
+            const msg = document.getElementById('eco-save-msg');
+            msg.style.display = 'flex';
+
+            // Ẩn sau 1 giây
+            setTimeout(() => { msg.style.display = 'none'; }, 1000);
+
+        } catch(e) {}
+    }
+
+    // ── POLL SỐ NGƯỜI ─────────────────────────────────────
+    let pollInterval = null;
+    function startPolling(){
+        pollInterval=setInterval(async()=>{
+            try{
+                if (document.getElementById('page-settings').style.display !== 'none')
+                    updateSettingsTemp(data.temp);
+                const r=await fetch('/people_count');
+                const d=await r.json();
+                if(d.count!==null){
+                    document.getElementById('people-count-overlay').innerText=d.count+' người';
+                }
+            }catch(e){}
+        },2000);
+    }
+    function stopPolling(){clearInterval(pollInterval);pollInterval=null;}
+
+    // ── MÀU THEO MỨC NHIỆT ────────────────────────────────
+    const TEMP_COLOR = {
+        'Quạt tắt'          : '#94a3b8',
+        'Chậm'              : '#3b82f6',
+        'Trung bình'        : '#f59e0b',
+        'Cao'               : '#ef4444',
+        'Không có cảm biến' : '#94a3b8',
+    };
+
+    // ── CẬP NHẬT UI NHIỆT ĐỘ ─────────────────────────────
+    function updateTempUI(temp, level) {
+        const color = TEMP_COLOR[level] || '#94a3b8';
+        const overlayEl = document.getElementById('temp-overlay-val');
+
+        if (temp !== null && temp !== undefined) {
+            const t = parseFloat(temp).toFixed(1);
+
+            // Panel Manual
+            const pt = document.getElementById('panel-temp');       if(pt) pt.innerText = t;
+            const pu = document.getElementById('panel-temp-unit');   if(pu) pu.innerText = ' °C';
+            const pl = document.getElementById('panel-temp-level');  if(pl){ pl.innerText = level; pl.style.color = color; }
+            const pi = document.getElementById('panel-temp-icon');   if(pi) pi.style.color = color;
+
+            // Panel Eco
+            const pe  = document.getElementById('panel-temp-eco');      if(pe)  pe.innerText = t;
+            const peu = document.getElementById('panel-temp-unit-eco');  if(peu) peu.innerText = ' °C';
+
+            // Overlay camera
+            if(overlayEl) overlayEl.innerText = t + ' °C';
+
+            // Smart panel
+            const sd = document.getElementById('smart-temp-disp');  if(sd){ sd.innerText = t; sd.style.color = color; }
+            const sl = document.getElementById('smart-temp-level');  if(sl){ sl.innerText = level; sl.style.color = color; }
+        } else {
+            const pt = document.getElementById('panel-temp');       if(pt) pt.innerText = '—';
+            const pu = document.getElementById('panel-temp-unit');  if(pu) pu.innerText = '';
+            const pl = document.getElementById('panel-temp-level'); if(pl){ pl.innerText = 'Không có cảm biến'; pl.style.color = '#94a3b8'; }
+            const pe = document.getElementById('panel-temp-eco');   if(pe) pe.innerText = '—';
+            if(overlayEl) overlayEl.innerText = '— °C';
+        }
+    }
+
+    // ── POLL NHIỆT ĐỘ mỗi 3 giây ─────────────────────────
+    setInterval(async () => {
+        try {
+            const res  = await fetch('/temperature');
+            const data = await res.json();
+            updateTempUI(data.temp, data.level);
+        } catch(e) {}
+    }, 3000);
+
+    // ── MODE ──────────────────────────────────────────────
+    function setMode(mode) {
+        document.querySelectorAll('.mode-btn').forEach(b=>{
+            b.className="mode-btn px-4 md:px-12 py-10 rounded-xl text-xl font-bold text-slate-500 hover:text-slate-700 transition-all";
+        });
+        document.getElementById(`btn-${mode}`).className="mode-btn px-4 md:px-12 py-10 rounded-xl text-xl font-bold transition-all bg-white shadow-sm text-emerald-600";
+
+        ['Manual','Eco','Smart'].forEach(m=>{document.getElementById(`panel-${m}`).style.display='none';});
+        document.getElementById(`panel-${mode}`).style.display='flex';
+        document.getElementById('panel-title').innerHTML = `Cài đặt ${mode}`;
+
+        const cs = document.getElementById('cam-status');
+        const po = document.getElementById('people-overlay');
+        const to = document.getElementById('temp-overlay');
+
+        fetch('/set_mode',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode})});
+
+        if (mode === 'Smart') {
+            startPolling();
+            cs.innerText = 'AI ON';
+            cs.className = 'px-2.5 py-1 bg-purple-500/20 text-purple-400 text-xs font-bold rounded-md border border-purple-500/30 animate-pulse';
+            po.style.display = 'flex';
+            to.style.display = 'flex';
+        } else {
+            stopPolling();
+            cs.innerText = 'AI OFF';
+            cs.className = 'px-2.5 py-1 bg-emerald-500/20 text-emerald-400 text-xs font-bold rounded-md border border-emerald-500/30';
+            po.style.display = 'none';
+            to.style.display = 'none';
+        }
+    }
+
+    // ── DARK MODE ─────────────────────────────────────────
+    let isDark = localStorage.getItem('theme') === 'dark';
+    function applyTheme(){
+        const icon=document.getElementById('theme-icon');
+        const lbl=document.getElementById('theme-label');
+        if(isDark){document.body.classList.add('dark');icon.className='fas fa-sun';lbl.innerText='Giao diện sáng';}
+        else{document.body.classList.remove('dark');icon.className='fas fa-moon';lbl.innerText='Giao diện tối';}
+    }
+    function toggleTheme(){isDark=!isDark;localStorage.setItem('theme',isDark?'dark':'light');applyTheme();}
+    function handleSidebar(){document.getElementById('sidebar').style.display=window.innerWidth>=768?'flex':'none';}
+    window.addEventListener('resize',handleSidebar);
+
+    // ══════════════════════════════════════════════════════
+    // ĐIỀU KHIỂN BIẾN TẦN — MANUAL
+    // ══════════════════════════════════════════════════════
+    function previewRPM(val) {
+        const hz  = (val / 2).toFixed(1);
+        const txt = parseInt(val) > 0 ? parseInt(val) + ' RPM' : '—';
+        const ps  = document.getElementById('panel-speed'); if(ps) ps.innerText = txt;
+        document.getElementById('disp-hw').innerText = 'Biến tần: ' + hz + ' Hz';
+    }
+
+    function applyRPM(val) {
+        if (USER_ROLE !== 'admin') return;
+        const rpm = parseFloat(val);
+        if (rpm === 0) { fanOff(); return; }
+        sendRPM(rpm);
+    }
+
+    async function sendRPM(rpm) {
+        try {
+            const res  = await fetch('/fan/set_rpm',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({rpm})});
+            const data = await res.json();
+            updateFanUI(data.rpm, data.hz, true);
+        } catch(e) { console.error('[FAN]', e); }
+    }
+
+    async function fanOn() {
+        if (USER_ROLE !== 'admin') { alert('⚠️ Bạn chỉ có quyền xem!'); return; }
+        let rpm = parseFloat(document.getElementById('rpm-slider').value);
+        if (rpm <= 0) rpm = 20;
+        document.getElementById('rpm-slider').value = rpm;
+        previewRPM(rpm);
+        await sendRPM(rpm);
+    }
+
+    async function fanOff() {
+        if (USER_ROLE !== 'admin') { alert('⚠️ Bạn chỉ có quyền xem!'); return; }
+        try {
+            await fetch('/fan/stop',{method:'POST'});
+            updateFanUI(0, 0, false);
+            document.getElementById('rpm-slider').value = 0;
+            previewRPM(0);
+        } catch(e) {}
+    }
+
+    function updateFanUI(rpm, hz, running) {
+        rpm = Math.round(rpm);
+        const txt = running && rpm > 0 ? rpm + ' RPM' : '—';
+
+        document.getElementById('disp-hw').innerText = 'Biến tần: ' + parseFloat(hz).toFixed(1) + ' Hz';
+
+        // Cập nhật mini-cards
+        const ps  = document.getElementById('panel-speed');     if(ps)  ps.innerText  = txt;
+        const pse = document.getElementById('panel-speed-eco'); if(pse) pse.innerText = txt;
+
+        const badge  = document.getElementById('fan-state-badge');
+        const pIcon  = document.getElementById('panel-fan-icon');
+
+        if (running && rpm > 0) {
+            badge.className = 'fan-state on';
+            badge.innerHTML = '<i class="fas fa-circle" style="font-size:7px"></i> Đang chạy';
+            if(pIcon) pIcon.classList.add('fan-spin');
+        } else {
+            badge.className = 'fan-state off';
+            badge.innerHTML = '<i class="fas fa-circle" style="font-size:7px"></i> Dừng';
+            if(pIcon) pIcon.classList.remove('fan-spin');
+        }
+    }
+
+    // Poll trạng thái biến tần mỗi 3 giây
+    setInterval(async () => {
+        try {
+            const res  = await fetch('/fan/status');
+            const data = await res.json();
+
+            if (data.hw_hz !== null)
+                document.getElementById('disp-hw').innerText = 'HW: ' + data.hw_hz + ' Hz';
+
+            updateFanUI(data.rpm, data.hz, data.running);
+
+            if (!data.ai_mode)
+                document.getElementById('rpm-slider').value = Math.round(data.rpm);
+
+            // Smart panel
+            if (data.ai_mode && data.people !== null) {
+                document.getElementById('people-count-overlay').innerText = data.people + ' người';
+                document.getElementById('smart-people-lbl').innerText     = data.people + ' người';
+                document.getElementById('smart-rpm-disp').innerText       = Math.round(data.rpm);
+                document.getElementById('smart-hz-disp').innerText        = '/ ' + parseFloat(data.hz).toFixed(1) + ' Hz';
+            }
+
+            // Cập nhật nhiệt độ từ fan/status (nếu có)
+            if (data.temp !== undefined)
+                updateTempUI(data.temp, data.temp_level);
+
+        } catch(e) {}
+    }, 3000);
+    // ── BÁO CÁO ──────────────────────────────────────────
+    let reportChart = null;
+
+    const REPORT_DATA = {
+        today: {
+            energy:'1.250', uptime:'18 giờ 32 phút', avgtemp:'28.5', aicount:'47',
+            labels: ['0h','2h','4h','6h','8h','10h','12h','14h','16h','18h','20h','22h'],
+            temps:  [26.1,25.8,25.2,24.9,26.3,28.4,30.1,31.8,33.2,32.5,30.8,29.4],
+            rpms:   [30,  30,  20,  20,  30,  55,  70,  85,  100, 90,  75,  60 ],
+        },
+        '7day': {
+            energy:'8.420', uptime:'6 ngày 14 giờ', avgtemp:'29.2', aicount:'312',
+            labels: ['T2','T3','T4','T5','T6','T7','CN'],
+            temps:  [27.5,29.1,31.2,28.8,30.5,32.1,27.9],
+            rpms:   [45,  60,  80,  55,  70,  95,  40  ],
+        },
+        '30day': {
+            energy:'35.800', uptime:'27 ngày 8 giờ', avgtemp:'29.8', aicount:'1248',
+            labels: ['T1','T2','T3','T4','T5','T6','T7','T8','T9','T10','T11','T12'],
+            temps:  [26.2,27.8,29.4,30.1,31.5,32.8,31.2,30.5,29.8,28.4,27.9,29.1],
+            rpms:   [35,  50,  65,  72,  85,  98,  80,  75,  68,  55,  48,  62 ],
+        }
+    };
+
+    function openReport() {
+        document.getElementById('page-history').style.display = 'none';
+        document.getElementById('page-home').style.display     = 'none';
+        document.getElementById('page-main').style.display     = 'none';
+        document.getElementById('page-settings').style.display = 'none';
+        document.getElementById('page-report').style.display   = 'block';
+        document.querySelectorAll('#sidebar nav a').forEach(a => {
+            a.className = 'flex items-center gap-3 px-4 py-3 text-slate-500 hover:bg-slate-50 hover:text-slate-700 rounded-xl font-medium transition';
+        });
+        document.querySelectorAll('#sidebar nav a')[2].className =
+            'flex items-center gap-3 px-4 py-3 bg-blue-50 text-blue-600 rounded-xl font-semibold';
+        setFilter('today');
+    }
+
+    function setFilter(period) {
+        ['today','7day','30day'].forEach(p => {
+            const btn = document.getElementById('filter-' + p);
+            btn.className = p === period ? 'filter-btn active' : 'filter-btn';
+        });
+        const d = REPORT_DATA[period];
+        document.getElementById('rpt-energy').innerHTML  = d.energy  + ' <span class="text-sm font-medium text-slate-400">kWh</span>';
+        document.getElementById('rpt-uptime').innerHTML  = d.uptime;
+        document.getElementById('rpt-avgtemp').innerHTML = d.avgtemp + ' <span class="text-sm font-medium text-slate-400">°C</span>';
+        document.getElementById('rpt-aicount').innerHTML = d.aicount + ' <span class="text-sm font-medium text-slate-400">lần</span>';
+        const ctx = document.getElementById('report-chart').getContext('2d');
+        if (reportChart) reportChart.destroy();
+        reportChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: d.labels,
+                datasets: [
+                    {
+                        label: 'Nhiệt độ (°C)',
+                        data: d.temps,
+                        borderColor: '#f87171',
+                        backgroundColor: 'rgba(248,113,113,0.08)',
+                        borderWidth: 2.5,
+                        pointBackgroundColor: '#f87171',
+                        pointRadius: 4,
+                        tension: 0.4,
+                        fill: true,
+                        yAxisID: 'y',
+                    },
+                    {
+                        label: 'Tốc độ quạt (RPM)',
+                        data: d.rpms,
+                        borderColor: '#3b82f6',
+                        backgroundColor: 'rgba(59,130,246,0.06)',
+                        borderWidth: 2.5,
+                        pointBackgroundColor: '#3b82f6',
+                        pointRadius: 4,
+                        tension: 0.4,
+                        fill: true,
+                        yAxisID: 'y1',
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                interaction: { mode:'index', intersect:false },
+                plugins: {
+                    legend: { display:false },
+                    tooltip: {
+                        backgroundColor: '#1e293b',
+                        titleColor: '#94a3b8',
+                        bodyColor: '#e2e8f0',
+                        padding: 10,
+                        cornerRadius: 10,
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: { color:'rgba(0,0,0,0.05)' },
+                        ticks: { font:{ weight:'700', size:11 }, color:'#94a3b8' }
+                    },
+                    y: {
+                        position: 'left',
+                        title: { display:true, text:'°C', color:'#f87171', font:{weight:'700'} },
+                        grid: { color:'rgba(0,0,0,0.05)' },
+                        ticks: { color:'#f87171', font:{weight:'700'} }
+                    },
+                    y1: {
+                        position: 'right',
+                        title: { display:true, text:'RPM', color:'#3b82f6', font:{weight:'700'} },
+                        grid: { drawOnChartArea:false },
+                        ticks: { color:'#3b82f6', font:{weight:'700'} }
+                    }
+                }
+            }
+        });
+    }
+
+    // ── LỊCH SỬ ──────────────────────────────────────────
+    const HISTORY_DATA = {
+        '1m': {
+            energy:'12.450 kWh', avgtemp:'28.9 °C', uptime:'312 giờ', aicount:'892 lần',
+            events: [
+                { time:'01/02 08:12', mode:'SMART',  temp:'26.2°C', rpm:'30',  people:'2',  event:'AI khởi động quạt mức Thấp' },
+                { time:'01/02 10:35', mode:'SMART',  temp:'29.8°C', rpm:'60',  people:'5',  event:'AI tăng tốc lên mức Trung bình' },
+                { time:'01/02 13:20', mode:'SMART',  temp:'33.1°C', rpm:'100', people:'8',  event:'AI tăng tốc lên mức Cao' },
+                { time:'01/02 15:00', mode:'ECO',    temp:'31.5°C', rpm:'60',  people:'—',  event:'Chuyển sang chế độ ECO' },
+                { time:'01/02 18:30', mode:'ECO',    temp:'28.0°C', rpm:'0',   people:'—',  event:'Quạt tắt theo lịch trình' },
+                { time:'02/02 09:00', mode:'MANUAL', temp:'27.5°C', rpm:'45',  people:'—',  event:'Người dùng bật thủ công' },
+                { time:'02/02 11:45', mode:'SMART',  temp:'32.4°C', rpm:'85',  people:'7',  event:'AI phát hiện nhiệt độ tăng cao' },
+                { time:'02/02 14:20', mode:'SMART',  temp:'30.2°C', rpm:'65',  people:'5',  event:'AI giảm tốc về mức Trung bình' },
+                { time:'03/02 08:30', mode:'SMART',  temp:'25.8°C', rpm:'30',  people:'2',  event:'AI khởi động quạt mức Thấp' },
+                { time:'03/02 12:15', mode:'SMART',  temp:'34.5°C', rpm:'100', people:'10', event:'AI tăng tốc tối đa — đông người' },
+                { time:'03/02 17:00', mode:'ECO',    temp:'29.1°C', rpm:'0',   people:'—',  event:'Quạt tắt theo lịch trình' },
+                { time:'04/02 09:10', mode:'MANUAL', temp:'26.8°C', rpm:'50',  people:'—',  event:'Người dùng điều chỉnh RPM' },
+            ]
+        },
+        '2m': {
+            energy:'24.800 kWh', avgtemp:'29.4 °C', uptime:'624 giờ', aicount:'1.847 lần',
+            events: [
+                { time:'01/01 08:00', mode:'SMART',  temp:'25.5°C', rpm:'30',  people:'2',  event:'AI khởi động quạt mức Thấp' },
+                { time:'01/01 11:30', mode:'SMART',  temp:'30.1°C', rpm:'70',  people:'6',  event:'AI tăng tốc lên mức Trung bình' },
+                { time:'01/01 14:00', mode:'SMART',  temp:'35.2°C', rpm:'100', people:'9',  event:'AI tăng tốc lên mức Cao' },
+                { time:'02/01 09:30', mode:'ECO',    temp:'28.3°C', rpm:'60',  people:'—',  event:'Hệ thống chạy chế độ ECO' },
+                { time:'02/01 18:00', mode:'ECO',    temp:'26.0°C', rpm:'0',   people:'—',  event:'Quạt tắt theo lịch trình' },
+                { time:'05/01 10:00', mode:'SMART',  temp:'31.8°C', rpm:'85',  people:'7',  event:'AI phát hiện nhiệt độ tăng' },
+                { time:'10/01 13:00', mode:'MANUAL', temp:'29.5°C', rpm:'55',  people:'—',  event:'Người dùng điều chỉnh thủ công' },
+                { time:'15/01 09:00', mode:'SMART',  temp:'27.2°C', rpm:'35',  people:'3',  event:'AI điều chỉnh tốc độ thấp' },
+                { time:'20/01 14:30', mode:'SMART',  temp:'33.8°C', rpm:'100', people:'8',  event:'AI tăng tốc tối đa' },
+                { time:'25/01 11:00', mode:'ECO',    temp:'28.8°C', rpm:'60',  people:'—',  event:'Chạy lịch trình ECO buổi sáng' },
+                { time:'01/02 08:12', mode:'SMART',  temp:'26.2°C', rpm:'30',  people:'2',  event:'AI khởi động quạt mức Thấp' },
+                { time:'15/02 13:20', mode:'SMART',  temp:'34.1°C', rpm:'100', people:'9',  event:'AI tăng tốc lên mức Cao' },
+            ]
+        },
+        '3m': {
+            energy:'38.200 kWh', avgtemp:'29.8 °C', uptime:'936 giờ', aicount:'2.654 lần',
+            events: [
+                { time:'01/12 08:00', mode:'SMART',  temp:'24.8°C', rpm:'20',  people:'1',  event:'AI khởi động quạt tốc độ thấp' },
+                { time:'05/12 10:30', mode:'SMART',  temp:'29.5°C', rpm:'60',  people:'5',  event:'AI tăng tốc lên mức Trung bình' },
+                { time:'10/12 14:00', mode:'SMART',  temp:'34.8°C', rpm:'100', people:'9',  event:'AI tăng tốc lên mức Cao' },
+                { time:'15/12 09:00', mode:'ECO',    temp:'27.0°C', rpm:'60',  people:'—',  event:'Hệ thống chạy chế độ ECO' },
+                { time:'20/12 18:30', mode:'ECO',    temp:'25.5°C', rpm:'0',   people:'—',  event:'Quạt tắt theo lịch trình' },
+                { time:'25/12 11:00', mode:'MANUAL', temp:'28.2°C', rpm:'50',  people:'—',  event:'Người dùng điều chỉnh thủ công' },
+                { time:'01/01 08:00', mode:'SMART',  temp:'25.5°C', rpm:'30',  people:'2',  event:'AI khởi động quạt mức Thấp' },
+                { time:'10/01 13:00', mode:'SMART',  temp:'32.1°C', rpm:'90',  people:'8',  event:'AI tăng tốc gần tối đa' },
+                { time:'20/01 09:30', mode:'ECO',    temp:'28.8°C', rpm:'60',  people:'—',  event:'Chạy lịch trình ECO' },
+                { time:'01/02 08:12', mode:'SMART',  temp:'26.2°C', rpm:'30',  people:'2',  event:'AI khởi động quạt mức Thấp' },
+                { time:'10/02 14:20', mode:'SMART',  temp:'33.5°C', rpm:'100', people:'9',  event:'AI tăng tốc tối đa — đông người' },
+                { time:'20/02 11:45', mode:'MANUAL', temp:'29.8°C', rpm:'65',  people:'—',  event:'Người dùng điều chỉnh thủ công' },
+            ]
+        }
+    };
+
+    const MODE_STYLE = {
+        'SMART'  : 'background:#f3e8ff; color:#7c3aed;',
+        'ECO'    : 'background:#d1fae5; color:#065f46;',
+        'MANUAL' : 'background:#f1f5f9; color:#475569;',
+    };
+
+    let currentPeriod = '1m';
+
+    function openHistory() {
+        document.getElementById('page-home').style.display     = 'none';
+        document.getElementById('page-main').style.display     = 'none';
+        document.getElementById('page-settings').style.display = 'none';
+        document.getElementById('page-report').style.display   = 'none';
+        document.getElementById('page-history').style.display  = 'block';
+        document.querySelectorAll('#sidebar nav a').forEach(a => {
+            a.className = 'flex items-center gap-3 px-4 py-3 text-slate-500 hover:bg-slate-50 hover:text-slate-700 rounded-xl font-medium transition';
+        });
+        document.querySelectorAll('#sidebar nav a')[3].className =
+            'flex items-center gap-3 px-4 py-3 bg-indigo-50 text-indigo-600 rounded-xl font-semibold';
+        setPeriod('1m');
+    }
+
+    function setPeriod(period) {
+        currentPeriod = period;
+        ['1m','2m','3m'].forEach(p => {
+            document.getElementById('period-' + p).className =
+                p === period ? 'period-btn active' : 'period-btn';
+        });
+
+        const d = HISTORY_DATA[period];
+
+        // Cập nhật stat cards
+        document.getElementById('his-energy').innerHTML  = d.energy;
+        document.getElementById('his-avgtemp').innerHTML = d.avgtemp;
+        document.getElementById('his-uptime').innerHTML  = d.uptime;
+        document.getElementById('his-aicount').innerHTML = d.aicount;
+        document.getElementById('his-count').innerText   = d.events.length + ' sự kiện';
+
+        // Render bảng
+        const tbody = document.getElementById('history-table-body');
+        tbody.innerHTML = '';
+        d.events.forEach(ev => {
+            const style = MODE_STYLE[ev.mode] || '';
+            tbody.innerHTML += `
+                <div class="event-row">
+                    <span class="text-xs font-semibold text-slate-500">${ev.time}</span>
+                    <span><span class="event-badge" style="${style}">${ev.mode}</span></span>
+                    <span class="text-xs font-bold text-red-500">${ev.temp}</span>
+                    <span class="text-xs font-bold text-blue-500">${ev.rpm}</span>
+                    <span class="text-xs font-bold text-purple-500">${ev.people}</span>
+                    <span class="text-xs text-slate-600 font-medium">${ev.event}</span>
+                </div>`;
+        });
+    }
+
+    function exportExcel() {
+        const d = HISTORY_DATA[currentPeriod];
+        const periodLabel = { '1m':'1 tháng', '2m':'2 tháng', '3m':'3 tháng' }[currentPeriod];
+
+        // Sheet 1: Tóm tắt
+        const summary = [
+            ['BÁO CÁO LỊCH SỬ HOẠT ĐỘNG - FANCO AI'],
+            ['Kỳ báo cáo:', periodLabel],
+            ['Xuất lúc:', new Date().toLocaleString('vi-VN')],
+            [],
+            ['TỔNG ĐIỆN NĂNG', 'NHIỆT ĐỘ TB', 'SỐ GIỜ HOẠT ĐỘNG', 'AI CAN THIỆP'],
+            [d.energy, d.avgtemp, d.uptime, d.aicount],
+        ];
+
+        // Sheet 2: Chi tiết sự kiện
+        const detail = [
+            ['Thời gian', 'Chế độ', 'Nhiệt độ', 'RPM', 'Số người', 'Sự kiện'],
+            ...d.events.map(ev => [ev.time, ev.mode, ev.temp, ev.rpm, ev.people, ev.event])
+        ];
+
+        const wb = XLSX.utils.book_new();
+        const ws1 = XLSX.utils.aoa_to_sheet(summary);
+        const ws2 = XLSX.utils.aoa_to_sheet(detail);
+
+        // Style cột rộng hơn
+        ws2['!cols'] = [
+            {wch:14}, {wch:8}, {wch:10}, {wch:6}, {wch:8}, {wch:40}
+        ];
+
+        XLSX.utils.book_append_sheet(wb, ws1, 'Tóm tắt');
+        XLSX.utils.book_append_sheet(wb, ws2, 'Chi tiết sự kiện');
+
+        const filename = `FanCoAI_LichSu_${periodLabel.replace(' ','')}_${new Date().toLocaleDateString('vi-VN').replace(/\//g,'-')}.xlsx`;
+        XLSX.writeFile(wb, filename);
+    }
+
+    // ── HẸN GIỜ ECO ─────────────────────────────────────
+    let timerInterval  = null;
+    let timerTotal     = 0;
+    let timerRemaining = 0;
+
+    function adjustTimer(unit, delta) {
+        const el = document.getElementById('timer-' + unit);
+        let val = parseInt(el.value) + delta;
+        if (unit === 'h') val = Math.max(0, Math.min(23, val));
+        else              val = Math.max(0, Math.min(59, val));
+        el.value = val;
+    }
+
+    function startTimer() {
+        if (USER_ROLE !== 'admin') { alert('⚠️ Bạn chỉ có quyền xem!'); return; }
+
+        const h = parseInt(document.getElementById('timer-h').value) || 0;
+        const m = parseInt(document.getElementById('timer-m').value) || 0;
+        const s = parseInt(document.getElementById('timer-s').value) || 0;
+        const total = h * 3600 + m * 60 + s;
+
+        if (total <= 0) { alert('Vui lòng nhập thời gian hẹn giờ!'); return; }
+        if (timerInterval) clearInterval(timerInterval);
+
+        timerTotal     = total;
+        timerRemaining = total;
+
+        // Cập nhật UI
+        setTimerBadge('running');
+
+        document.getElementById('timer-progress-wrap').style.display = 'block';
+        document.getElementById('timer-display').classList.remove('hidden');
+        document.getElementById('btn-timer-start').disabled  = true;
+        document.getElementById('btn-timer-start').style.opacity = '0.5';
+        document.getElementById('btn-timer-cancel').disabled = false;
+
+        // Ẩn ô nhập trong lúc đếm
+        ['timer-h','timer-m','timer-s'].forEach(id => {
+            document.getElementById(id).disabled = true;
+            document.getElementById(id).style.opacity = '0.5';
+        });
+
+        updateTimerDisplay();
+
+        timerInterval = setInterval(() => {
+            timerRemaining--;
+            updateTimerDisplay();
+
+            if (timerRemaining <= 0) {
+                clearInterval(timerInterval);
+                timerInterval = null;
+                fanOff();
+                setTimerBadge('finished');
+                document.getElementById('timer-countdown').innerText = '00:00:00';
+                document.getElementById('timer-remain-text').innerText = '⏰ Đã tắt quạt!';
+                document.getElementById('timer-progress-bar').style.width = '0%';
+                document.getElementById('btn-timer-start').disabled  = false;
+                document.getElementById('btn-timer-start').style.opacity = '1';
+                document.getElementById('btn-timer-cancel').disabled = true;
+                ['timer-h','timer-m','timer-s'].forEach(id => {
+                    document.getElementById(id).disabled = false;
+                    document.getElementById(id).style.opacity = '1';
+                });
+            }
+        }, 1000);
+    }
+
+    function cancelTimer() {
+        if (timerInterval) {
+            clearInterval(timerInterval);
+            timerInterval = null;
+        }
+        timerRemaining = 0;
+        setTimerBadge('waiting');
+        document.getElementById('timer-progress-wrap').style.display = 'none';
+        document.getElementById('timer-display').classList.add('hidden');
+        document.getElementById('timer-progress-bar').style.width = '100%';
+        document.getElementById('btn-timer-start').disabled  = false;
+        document.getElementById('btn-timer-start').style.opacity = '1';
+        document.getElementById('btn-timer-cancel').disabled = true;
+        ['timer-h','timer-m','timer-s'].forEach(id => {
+            document.getElementById(id).disabled = false;
+            document.getElementById(id).style.opacity = '1';
+            document.getElementById(id).value = 0;
+        });
+    }
+
+    function updateTimerDisplay() {
+        const h = Math.floor(timerRemaining / 3600);
+        const m = Math.floor((timerRemaining % 3600) / 60);
+        const s = timerRemaining % 60;
+        const hh = String(h).padStart(2,'0');
+        const mm = String(m).padStart(2,'0');
+        const ss = String(s).padStart(2,'0');
+
+        document.getElementById('timer-countdown').innerText = `${hh}:${mm}:${ss}`;
+
+        // Tính % còn lại
+        const pct = timerTotal > 0 ? (timerRemaining / timerTotal) * 100 : 0;
+        document.getElementById('timer-progress-bar').style.width = pct + '%';
+
+        // Đổi màu progress bar khi gần hết
+        const bar = document.getElementById('timer-progress-bar');
+        if (pct > 50)      bar.style.background = 'linear-gradient(to right, #10b981, #3b82f6)';
+        else if (pct > 20) bar.style.background = 'linear-gradient(to right, #f59e0b, #10b981)';
+        else               bar.style.background = 'linear-gradient(to right, #ef4444, #f59e0b)';
+
+        // Text còn lại
+        const totalMin = Math.ceil(timerRemaining / 60);
+        const remainText = timerRemaining >= 60
+            ? `còn khoảng ${totalMin} phút nữa`
+            : `còn ${timerRemaining} giây nữa`;
+        document.getElementById('timer-remain-text').innerText = remainText;
+    }
+
+    function setTimerBadge(state) {
+        const badge = document.getElementById('timer-badge');
+        const map = {
+            waiting  : { cls:'timer-badge waiting',  text:'<i class="fas fa-circle" style="font-size:7px"></i> Chờ' },
+            running  : { cls:'timer-badge running',  text:'<i class="fas fa-circle" style="font-size:7px"></i> Đang đếm' },
+            finished : { cls:'timer-badge finished', text:'<i class="fas fa-circle" style="font-size:7px"></i> Kết thúc' },
+        };
+        badge.className = map[state].cls;
+        badge.innerHTML = map[state].text;
+    }
+
+    // ── REPEAT MODE ECO ──────────────────────────────────
+    function toggleRepeatMenu() {
+        const menu = document.getElementById('repeat-menu');
+        menu.classList.toggle('hidden');
+    }
+
+    // Đóng menu khi click ra ngoài
+    document.addEventListener('click', function(e) {
+        const menu = document.getElementById('repeat-menu');
+        if (menu && !menu.classList.contains('hidden')) {
+            if (!e.target.closest('#repeat-menu') && !e.target.closest('button[onclick="toggleRepeatMenu()"]')) {
+                menu.classList.add('hidden');
+            }
+        }
+    });
+
+    function setRepeatMode(mode) {
+        const daysDiv = document.getElementById('repeat-days');
+        const summary = document.getElementById('repeat-summary');
+        if (mode === 'custom') {
+            daysDiv.classList.remove('hidden');
+            summary.innerHTML = '<i class="fas fa-redo mr-1"></i> Tùy chọn ngày';
+        } else {
+            daysDiv.classList.add('hidden');
+            summary.innerHTML = mode === 'once'
+                ? '<i class="fas fa-redo mr-1"></i> 1 lần'
+                : '<i class="fas fa-redo mr-1"></i> Hằng ngày';
+        }
+    }
+    async function cancelEco() {
+        if (USER_ROLE !== 'admin') { alert('⚠️ Bạn chỉ có quyền xem!'); return; }
+        try {
+            await fetch('/eco/cancel', { method: 'POST' });
+            // Hiện thông báo
+            const msg = document.getElementById('eco-save-msg');
+            if (msg) {
+                msg.style.display = 'flex';
+                msg.querySelector('span').innerText = 'Đã hủy lịch trình!';
+                msg.style.background = '#fef2f2';
+                msg.style.borderColor = '#fecdd3';
+                msg.querySelector('i').style.color = '#ef4444';
+                msg.querySelector('span').style.color = '#991b1b';
+                setTimeout(() => {
+                    msg.style.display = 'none';
+                    // Reset màu về mặc định
+                    msg.style.background = '';
+                    msg.style.borderColor = '';
+                    msg.querySelector('i').style.color = '';
+                    msg.querySelector('span').style.color = '';
+                    msg.querySelector('span').innerText = 'Lưu lịch trình thành công!';
+                }, 2000);
+            }
+        } catch(e) {}
+    }
+
+    // ══════════════════════════════════════════════════════
+    window.onload = function() {
+
+        applyTheme();
+        handleSidebar();
+        updateTime();
+        generateTimeOptions();
+        startHLSStream();
+        // Mặc định hiển thị trang chính
+        document.getElementById('page-home').style.display = 'none';
+        document.getElementById('page-main').style.display = 'grid';
+        document.getElementById('page-settings').style.display = 'none';
+        document.getElementById('page-report').style.display = 'none';
+        document.getElementById('page-history').style.display = 'none';
+        // Phân quyền viewer
+        if (USER_ROLE !== 'admin') {
+            // Ẩn nút bật/tắt quạt
+            document.querySelectorAll('button[onclick="fanOn()"], button[onclick="fanOff()"]')
+                .forEach(b => { b.disabled = true; b.style.opacity = '0.4'; b.style.cursor = 'not-allowed'; });
+            // Vô hiệu slider RPM
+            const slider = document.getElementById('rpm-slider');
+            if (slider) { slider.disabled = true; slider.style.opacity = '0.4'; }
+            // Ẩn nút lưu cài đặt & lưu lịch trình
+            document.querySelectorAll('button[onclick="saveSettings()"], button[onclick="saveEco()"]')
+                .forEach(b => { b.disabled = true; b.style.opacity = '0.4'; b.style.cursor = 'not-allowed'; });
+            // Vô hiệu PTZ
+            document.querySelectorAll('.ptz-btn')
+                .forEach(b => { b.disabled = true; b.style.opacity = '0.4'; });
+            // Thêm badge "Chỉ xem" trên header
+            const badge = document.createElement('span');
+            badge.innerHTML = '👁 Chế độ xem';
+            badge.style.cssText = 'background:#fef3c7; color:#92400e; font-size:12px; font-weight:700; padding:4px 12px; border-radius:20px; border:1px solid #fde68a;';
+            document.querySelector('header .flex.items-center.gap-4').prepend(badge);
+        }
+    };
+    </script>
+</body>
+</html>

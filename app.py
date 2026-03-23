@@ -1,0 +1,536 @@
+from flask import Flask, render_template, request, redirect, url_for, session, Response, jsonify
+import cv2
+import requests
+import threading
+import time
+import concurrent.futures
+import numpy as np
+import os, signal
+
+# ====================================================================
+# HAILO-8L — import có bảo vệ
+# ====================================================================
+try:
+    from hailo_platform import (
+        HEF, VDevice, HailoStreamInterface, InferVStreams,
+        ConfigureParams, InputVStreamParams, OutputVStreamParams,
+    )
+    HAILO_AVAILABLE = True
+    print("[HAILO] ✅ hailo_platform import thành công")
+except ImportError as e:
+    HAILO_AVAILABLE = False
+    print(f"[HAILO] ❌ Không tìm thấy hailo_platform: {e} — sẽ dùng CPU fallback")
+
+# ====================================================================
+# MODBUS — import có bảo vệ
+# ====================================================================
+try:
+    from pymodbus.client import ModbusSerialClient
+    import pymodbus
+    PYMODBUS_AVAILABLE = True
+except ImportError:
+    PYMODBUS_AVAILABLE = False
+    print("[MODBUS] ❌ pymodbus chưa cài — biến tần vô hiệu hoá")
+
+# ====================================================================
+# FLASK
+# ====================================================================
+ptz_executor = concurrent.futures.ThreadPoolExecutor(max_workers=2)
+app = Flask(__name__)
+app.secret_key = 'smartfan_datn_secret_key'
+
+USERS = {
+    'admin':  {'password': '123',     'role': 'admin'},
+    'viewer': {'password': 'view123', 'role': 'viewer'},
+}
+
+# ====================================================================
+# CẤU HÌNH CAMERA EZVIZ
+# ====================================================================
+RTSP_URL     = "rtsp://admin:BLMYQK@192.168.50.194:554/h264/ch1/main/av_stream"
+ACCESS_TOKEN = "at.djmvrykn6vx89dl3c3b74g53b3jg4imx-7ehcljoo5u-118ingl-i2lkdn3ou"
+DEVICE_SN    = "J83082531"
+CHANNEL      = 1
+BASE_URL     = "https://isgpopen.ezvizlife.com"
+DIR_MAP      = {"UP": 0, "DOWN": 1, "LEFT": 2, "RIGHT": 3}
+
+# ====================================================================
+# CẤU HÌNH BIẾN TẦN
+# ====================================================================
+MODBUS_PORT   = '/dev/ttyACM0'
+SLAVE_ID      = 1
+BAUDRATE      = 9600
+MAX_FREQ_HZ   = 50.0
+MAX_RPM       = 100.0
+
+REG_FREQUENCY = 0x01
+REG_COMMAND   = 0x02
+REG_STATUS    = 0x1000
+REG_RUN_FREQ  = 0x1003
+
+SMART_THRESHOLD = [
+    (5,   20.0),    # ≤5  người → 20 RPM → 10 Hz
+    (10,  60.0),    # ≤10 người → 60 RPM → 30 Hz
+    (999, 100.0),   # >10 người → 100 RPM → 50 Hz
+]
+
+# ====================================================================
+# TRẠNG THÁI TOÀN CỤC
+# ====================================================================
+people_count   = 0
+ai_mode        = False
+fan_rpm        = 0.0
+fan_running    = False
+fan_lock       = threading.Lock()
+_last_auto_rpm = None
+modbus_ok      = False
+client         = None
+
+# ====================================================================
+# HAILO MODEL CLASS — gọn, không duplicate
+# ====================================================================
+class HailoYOLO:
+    def __init__(self, hef_path: str):
+        self.hef     = HEF(hef_path)
+        self.target  = VDevice()
+
+        cfg_params         = ConfigureParams.create_from_hef(self.hef, interface=HailoStreamInterface.PCIe)
+        self.network_group = self.target.configure(self.hef, cfg_params)[0]
+        self.ng_params     = self.network_group.create_params()
+
+        self.in_info  = self.hef.get_input_vstream_infos()[0]
+        self.out_info = self.hef.get_output_vstream_infos()[0]
+
+        # input_shape = (H, W, C)
+        self.in_h, self.in_w = self.in_info.shape[0], self.in_info.shape[1]
+
+        self.in_params  = InputVStreamParams.make(self.network_group)
+        self.out_params = OutputVStreamParams.make(self.network_group)
+
+        print(f"[HAILO] Model: {hef_path} | Input: {self.in_h}×{self.in_w}")
+
+    def preprocess(self, frame):
+        """BGR frame → uint8 RGB resized, thêm batch dim."""
+        resized = cv2.resize(frame, (self.in_w, self.in_h))
+        rgb     = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
+        return np.expand_dims(rgb, axis=0).astype(np.uint8)
+
+    def infer(self, pipeline, frame):
+        h, w    = frame.shape[:2]
+        data    = {self.in_info.name: self.preprocess(frame)}
+        raw_all = pipeline.infer(data)
+
+        results = []
+        try:
+            # Hailo NMS output: dict{ name: [batch] }
+            # batch[0] = list of 80 classes (COCO)
+            # class[i] = ndarray shape (num_dets, 5): [ymin, xmin, ymax, xmax, score]
+            out_name = self.out_info.name
+            batch    = raw_all[out_name]   # list, len = batch_size = 1
+            classes  = batch[0]            # list of 80 arrays (ragged)
+
+            # Debug lần đầu
+            if not hasattr(self, '_debug_done'):
+                self._debug_done = True
+                print(f"[HAILO DEBUG] out_name = {out_name}")
+                print(f"[HAILO DEBUG] num_classes = {len(classes)}")
+                if len(classes) > 0:
+                    print(f"[HAILO DEBUG] class[0] type={type(classes[0])}")
+                    if hasattr(classes[0], 'shape'):
+                        print(f"[HAILO DEBUG] class[0] shape={classes[0].shape}")
+                    elif len(classes[0]) > 0:
+                        print(f"[HAILO DEBUG] class[0][0] = {classes[0][0]}")
+
+            # Person = class index 0 trong COCO
+            person_dets = classes[0]   # ndarray (num_dets, 5)
+
+            for det in person_dets:
+                score = float(det[4])
+                if score < 0.45:
+                    continue
+                ymin, xmin, ymax, xmax = float(det[0]), float(det[1]), float(det[2]), float(det[3])
+                x1 = max(0, int(xmin * w)); y1 = max(0, int(ymin * h))
+                x2 = min(w, int(xmax * w)); y2 = min(h, int(ymax * h))
+                if x2 > x1 and y2 > y1:
+                    results.append((x1, y1, x2, y2, score))
+
+        except Exception as e:
+            import traceback
+            print(f"[HAILO INFER] Lỗi: {e}")
+            traceback.print_exc()
+
+        return results
+
+
+# Khởi tạo model — bọc try/except để không crash nếu Hailo không có
+hailo_model = None
+if HAILO_AVAILABLE:
+    try:
+        hailo_model = HailoYOLO("yolov8s.hef")
+        print("[HAILO] ✅ Model load thành công")
+    except Exception as e:
+        print(f"[HAILO] ❌ Không load được model: {e}")
+        HAILO_AVAILABLE = False
+
+# ====================================================================
+# MODBUS HELPERS
+# ====================================================================
+def modbus_connect():
+    global client, modbus_ok
+    if not PYMODBUS_AVAILABLE:
+        modbus_ok = False
+        return False
+    try:
+        client = ModbusSerialClient(
+            port=MODBUS_PORT, baudrate=BAUDRATE,
+            bytesize=8, parity='N', stopbits=1, timeout=1
+        )
+        if client.connect():
+            modbus_ok = True
+            print(f"[MODBUS] ✅ Kết nối: {MODBUS_PORT}")
+            return True
+        modbus_ok = False
+        print(f"[MODBUS] ❌ Không kết nối được: {MODBUS_PORT} — vẫn tiếp tục")
+        return False
+    except Exception as e:
+        modbus_ok = False
+        print(f"[MODBUS] ❌ Lỗi: {e} — vẫn tiếp tục")
+        return False
+
+class _Err:
+    """Fake result object trả về khi Modbus offline."""
+    def isError(self): return True
+
+def _write(reg, val):
+    if not modbus_ok or client is None: return _Err()
+    try:    return client.write_register(reg, val)
+    except: return _Err()
+
+def _read(reg, count=1):
+    if not modbus_ok or client is None: return _Err()
+    try:    return client.read_holding_registers(reg, count=count)
+    except: return _Err()
+
+# ====================================================================
+# QUY ĐỔI RPM ↔ HZ
+# ====================================================================
+def rpm_to_hz(rpm):  return max(0.0, min(float(rpm), MAX_RPM)) / 2.0
+def hz_to_rpm(hz):   return float(hz) * 2.0
+def hz_to_val(hz):   return int((max(0, min(float(hz), MAX_FREQ_HZ)) / MAX_FREQ_HZ) * 10000)
+def val_to_hz(v):    return round((v / 10000) * MAX_FREQ_HZ, 1)
+
+# ====================================================================
+# ĐIỀU KHIỂN BIẾN TẦN
+# ====================================================================
+def set_speed_rpm(rpm):
+    r = _write(REG_FREQUENCY, hz_to_val(rpm_to_hz(rpm)))
+    if not r.isError():
+        print(f"[FAN] Set {rpm:.1f} RPM → {rpm_to_hz(rpm):.1f} Hz")
+        return True
+    if modbus_ok: print(f"[FAN] Lỗi set speed")
+    return False
+
+def start_motor():
+    r = _write(REG_COMMAND, 1)
+    if not r.isError(): print("[FAN] START"); return True
+    return False
+
+def stop_motor():
+    r = _write(REG_COMMAND, 6)
+    if not r.isError(): print("[FAN] STOP"); return True
+    return False
+
+def read_hw_status():
+    s = _read(REG_STATUS)
+    f = _read(REG_RUN_FREQ)
+    if not s.isError() and not f.isError():
+        fhz = val_to_hz(f.registers[0])
+        return s.registers[0], fhz, hz_to_rpm(fhz)
+    return None, None, None
+
+def run_fan(rpm):
+    global fan_rpm, fan_running
+    rpm = max(0.0, min(float(rpm), MAX_RPM))
+    with fan_lock:
+        set_speed_rpm(rpm)
+        start_motor()
+        fan_rpm     = rpm
+        fan_running = True
+    return True
+
+def stop_fan():
+    global fan_rpm, fan_running
+    with fan_lock:
+        stop_motor()
+        fan_rpm     = 0.0
+        fan_running = False
+
+def people_to_rpm(count):
+    for thr, rpm in SMART_THRESHOLD:
+        if count <= thr: return rpm
+    return MAX_RPM
+
+# ====================================================================
+# SMART MODE THREAD
+# ====================================================================
+def smart_fan_thread():
+    global _last_auto_rpm
+    while True:
+        time.sleep(2)
+        if not ai_mode:
+            _last_auto_rpm = None
+            continue
+        rpm = people_to_rpm(people_count)
+        if rpm != _last_auto_rpm:
+            print(f"[SMART] {people_count} người → {rpm} RPM → {rpm_to_hz(rpm)} Hz")
+            run_fan(rpm)
+            _last_auto_rpm = rpm
+
+threading.Thread(target=smart_fan_thread, daemon=True).start()
+
+# ====================================================================
+# PTZ
+# ====================================================================
+def move_c6n(direction, duration=0):
+    try:
+        if direction == "STOP":
+            for d in [0, 1, 2, 3]:
+                requests.post(f"{BASE_URL}/api/lapp/device/ptz/stop",
+                    data={"accessToken": ACCESS_TOKEN, "deviceSerial": DEVICE_SN,
+                          "channelNo": CHANNEL, "direction": d}, timeout=3)
+            print("[PTZ] STOP")
+        else:
+            r = requests.post(f"{BASE_URL}/api/lapp/device/ptz/start",
+                data={"accessToken": ACCESS_TOKEN, "deviceSerial": DEVICE_SN,
+                      "channelNo": CHANNEL, "direction": DIR_MAP[direction], "speed": 2}, timeout=3)
+            print(f"[PTZ {direction}] {r.text}")
+            if duration > 0:
+                time.sleep(duration)
+                move_c6n("STOP")
+    except Exception as e:
+        print(f"[PTZ ERROR] {e}")
+
+# ====================================================================
+# GENERATE FRAMES — Hailo-8L inference bên trong
+# ====================================================================
+def _draw_detections(frame, detections):
+    """Vẽ bounding box lên frame."""
+    for (x1, y1, x2, y2, conf) in detections:
+        cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 100), 2)
+        cv2.putText(frame, f"Person {conf:.2f}",
+                    (x1, y1 - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 100), 2)
+
+def generate_frames():
+    """Generator MJPEG — mở Hailo pipeline 1 lần, dùng mãi."""
+    global people_count
+
+    camera = cv2.VideoCapture(RTSP_URL)
+    camera.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+
+    # ── Nếu có Hailo, mở pipeline một lần duy nhất ──
+    if HAILO_AVAILABLE and hailo_model is not None:
+        print("[STREAM] Mở Hailo pipeline...")
+        with InferVStreams(hailo_model.network_group,
+                           hailo_model.in_params,
+                           hailo_model.out_params) as pipeline:
+            with hailo_model.network_group.activate(hailo_model.ng_params):
+                print("[STREAM] Hailo pipeline READY")
+                while True:
+                    ok, frame = camera.read()
+                    if not ok:
+                        break
+
+                    if ai_mode:
+                        try:
+                            dets         = hailo_model.infer(pipeline, frame)
+                            people_count = len(dets)
+                            _draw_detections(frame, dets)
+                        except Exception as e:
+                            print(f"[HAILO INFER] Lỗi: {e}")
+
+                    _overlay_text(frame)
+                    yield _encode(frame)
+    else:
+        # ── Fallback CPU (không có Hailo) ──
+        print("[STREAM] Hailo không khả dụng — chạy fallback (không AI)")
+        while True:
+            ok, frame = camera.read()
+            if not ok:
+                break
+            _overlay_text(frame)
+            yield _encode(frame)
+
+def _overlay_text(frame):
+    if ai_mode:
+        cv2.putText(frame,
+            f"People: {people_count}  |  Fan: {fan_rpm:.0f} RPM / {rpm_to_hz(fan_rpm):.1f} Hz",
+            (10, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 255, 100), 2)
+
+def _encode(frame):
+    # 1. Thu nhỏ khung hình xuống 800x600 (nhẹ đi 1 nửa)
+    frame_resized = cv2.resize(frame, (800, 600))
+    
+    # 2. Hạ chất lượng nén xuống 65
+    _, buf = cv2.imencode('.jpg', frame_resized, [cv2.IMWRITE_JPEG_QUALITY, 65])
+    
+    return b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + buf.tobytes() + b'\r\n'
+
+# ====================================================================
+# ROUTES — XÁC THỰC
+# ====================================================================
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    error = None
+    if request.method == 'POST':
+        u, p = request.form['username'], request.form['password']
+        if u in USERS and USERS[u]['password'] == p:
+            session['logged_in'] = True
+            session['username']  = u
+            session['role']      = USERS[u]['role']
+            return redirect(url_for('index'))
+        error = 'Sai tài khoản hoặc mật khẩu!'
+    return render_template('login.html', error=error)
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('login'))
+
+@app.route('/')
+def index():
+    if not session.get('logged_in'):
+        return redirect(url_for('login'))
+    return render_template('index.html', username=session.get('username'), role=session.get('role','viewer'))
+
+@app.route('/video_feed')
+def video_feed():
+    if not session.get('logged_in'):
+        return redirect(url_for('login'))
+        
+    # Thêm các header ép trình duyệt và Cloudflare KHÔNG ĐƯỢC CACHE luồng này
+    response = Response(generate_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
+    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    response.headers['Pragma'] = 'no-cache'
+    return response
+
+# ====================================================================
+# ROUTES — CAMERA & PTZ
+# ====================================================================
+@app.route('/get_stream_url')
+def get_stream_url():
+    if not session.get('logged_in'):
+        return jsonify({'error': 'Unauthorized'}), 401
+    try:
+        r = requests.post(f"{BASE_URL}/api/lapp/live/address/get",
+            data={"accessToken": ACCESS_TOKEN, "deviceSerial": DEVICE_SN,
+                  "channelNo": CHANNEL, "protocol": 2, "quality": 1}, timeout=10)
+        d = r.json()
+        if d.get('code') != '200':
+            return jsonify({'error': d.get('msg')}), 500
+        return jsonify({'url': d['data']['url']})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/ptz', methods=['POST'])
+def ptz_control():
+    if not session.get('logged_in'):
+        return jsonify({'status': 'error'}), 401
+    d = request.get_json()
+    ptz_executor.submit(move_c6n, d.get('direction', 'STOP'), 0)
+    return jsonify({'status': 'success'})
+
+# ====================================================================
+# ROUTES — AI MODE
+# ====================================================================
+@app.route('/set_mode', methods=['POST'])
+def set_mode():
+    global ai_mode, _last_auto_rpm
+    mode    = request.get_json().get('mode', 'Manual')
+    ai_mode = (mode == 'Smart')
+    if not ai_mode:
+        _last_auto_rpm = None
+        stop_fan()
+        print("[MODE] Manual/Eco — quạt dừng")
+    else:
+        print("[MODE] Smart ON — Hailo đang quét...")
+    return jsonify({'status': 'ok', 'ai_mode': ai_mode,
+                    'hailo': HAILO_AVAILABLE})
+
+@app.route('/people_count')
+def get_people_count():
+    return jsonify({'count': people_count if ai_mode else None})
+
+# ====================================================================
+# ROUTES — BIẾN TẦN
+# ====================================================================
+@app.route('/fan/set_rpm', methods=['POST'])
+def fan_set_rpm():
+    if not session.get('logged_in'):
+        return jsonify({'status': 'error'}), 401
+    rpm = float(request.get_json().get('rpm', 0))
+    run_fan(rpm)
+    return jsonify({'status': 'ok', 'rpm': fan_rpm,
+                    'hz': rpm_to_hz(fan_rpm), 'modbus': modbus_ok})
+
+@app.route('/fan/stop', methods=['POST'])
+def fan_stop_route():
+    if not session.get('logged_in'):
+        return jsonify({'status': 'error'}), 401
+    stop_fan()
+    return jsonify({'status': 'ok', 'rpm': 0, 'hz': 0, 'modbus': modbus_ok})
+
+@app.route('/fan/status')
+def fan_status():
+    if not session.get('logged_in'):
+        return jsonify({'status': 'error'}), 401
+    _, hw_hz, hw_rpm = read_hw_status()
+    return jsonify({
+        'rpm'    : fan_rpm,
+        'hz'     : rpm_to_hz(fan_rpm),
+        'running': fan_running,
+        'hw_hz'  : hw_hz,
+        'hw_rpm' : hw_rpm,
+        'people' : people_count if ai_mode else None,
+        'ai_mode': ai_mode,
+        'modbus' : modbus_ok,
+        'hailo'  : HAILO_AVAILABLE,
+    })
+
+@app.route('/modbus/reconnect', methods=['POST'])
+def modbus_reconnect():
+    if not session.get('logged_in'):
+        return jsonify({'status': 'error'}), 401
+    ok = modbus_connect()
+    return jsonify({'status': 'ok' if ok else 'offline', 'modbus': ok})
+
+# ====================================================================
+# ROUTE — NHIỆT ĐỘ (placeholder — gắn cảm biến sau)
+# ====================================================================
+@app.route('/temperature')
+def temperature():
+    """
+    Placeholder: đọc nhiệt độ từ cảm biến.
+    Khi gắn cảm biến thực (DHT22, DS18B20...) thay phần này.
+    """
+    temp  = None   # ← thay bằng giá trị thực khi có cảm biến
+    level = 'Không có cảm biến'
+
+    if temp is not None:
+        if   temp < 28: level = 'Chậm'
+        elif temp < 33: level = 'Trung bình'
+        else:           level = 'Cao'
+
+    return jsonify({'temp': temp, 'level': level})
+
+# ====================================================================
+# KHỞI ĐỘNG
+# ====================================================================
+if __name__ == '__main__':
+    # Dọn tiến trình cũ chiếm port 5000
+    os.system("fuser -k 5000/tcp 2>/dev/null || true")
+    time.sleep(0.5)
+
+    # Modbus — không block nếu thất bại
+    modbus_connect()
+
+    app.run(host='0.0.0.0', port=5000, debug=False)

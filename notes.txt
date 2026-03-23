@@ -1,0 +1,9 @@
+Thự tự chạy:
+B1: Kích hoạt môi trường: source venv/bin/activate
+B2: chay file code app.py: python3 app.py
+B3: chạy lệnh: 
+    - sudo systemctl restart fanco.service  : để pi cập nhật code app.py
+    - sudo systemctl start fanco.service     : chạy dịch vụ ngầm
+    - sudo systemctl stop fanco.service     : dừng dịch vụ ngầm
+
+Lệnh check sụt ap: vcgencmd get_throttled
