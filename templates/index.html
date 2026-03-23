@@ -559,7 +559,7 @@
 
             <!-- ══ TRANG BÁO CÁO ══ -->
             <div id="page-report" class="h-full overflow-y-auto">
-                <div class="max-w-3xl mx-auto py-2 space-y-4">
+                <div class="max-w-4xl mx-auto py-2 space-y-4">
 
                     <!-- Nút quay lại -->
                     <div>
@@ -645,7 +645,7 @@
 
             <!-- ══ TRANG CÀI ĐẶT CHUNG ══ -->
             <div id="page-settings" class="h-full overflow-y-auto">
-                <div class="max-w-2xl mx-auto py-2 space-y-4">
+                <div class="max-w-4xl mx-auto py-2 space-y-4">
 
                     <!-- Nút quay lại -->
                     <div>
@@ -1005,6 +1005,24 @@
 
                                     <!-- Badge hiện chế độ đang chọn -->
                                     <div class="mt-2 pt-2 border-t border-slate-100">
+                                        <!-- Chọn mức quạt -->
+                                        <div class="mt-2 pt-2 border-t border-slate-100">
+                                            <p class="text-xs font-black text-slate-500 uppercase tracking-wide mb-2 px-1">Mức quạt ECO</p>
+                                            <div class="flex flex-col gap-1">
+                                                <label class="flex items-center gap-2 px-2 py-2 rounded-xl hover:bg-slate-50 cursor-pointer">
+                                                    <input type="radio" name="eco-speed" value="33" class="accent-emerald-500" onchange="setEcoSpeed(33)" checked>
+                                                    <span class="text-sm font-semibold text-slate-700">🔵 Mức 1 — 33 RPM</span>
+                                                </label>
+                                                <label class="flex items-center gap-2 px-2 py-2 rounded-xl hover:bg-slate-50 cursor-pointer">
+                                                    <input type="radio" name="eco-speed" value="66" class="accent-emerald-500" onchange="setEcoSpeed(66)">
+                                                    <span class="text-sm font-semibold text-slate-700">🟡 Mức 2 — 66 RPM</span>
+                                                </label>
+                                                <label class="flex items-center gap-2 px-2 py-2 rounded-xl hover:bg-slate-50 cursor-pointer">
+                                                    <input type="radio" name="eco-speed" value="100" class="accent-emerald-500" onchange="setEcoSpeed(100)">
+                                                    <span class="text-sm font-semibold text-slate-700">🔴 Mức 3 — 100 RPM</span>
+                                                </label>
+                                            </div>
+                                        </div>
                                         <span id="repeat-summary" class="text-xs font-bold text-emerald-600">
                                             <i class="fas fa-redo mr-1"></i> 1 lần
                                         </span>
@@ -1042,12 +1060,15 @@
                             <i class="fas fa-check-circle text-emerald-500"></i>
                             <span class="text-emerald-700 text-sm font-bold">Thành Công!</span>
                         </div>
+                        <!-- Thêm thông báo hủy -->
+                        <div id="eco-cancel-msg" class="items-center justify-center gap-2 px-4 py-2 bg-red-50 border border-red-200 rounded-xl mb-2" style="display:none;">
+                            <i class="fas fa-times-circle text-red-500"></i>
+                            <span class="text-red-700 text-sm font-bold">Đã hủy lịch trình!</span>
+                        </div>
 
                         <!-- NÚT LƯU LỊCH TRÌNH — chỉ cho giờ bật/tắt -->
 
-                        <button onclick="saveEco()" class="w-full py-3 bg-green-500 hover:bg-green-600 text-white font-bold rounded-xl shadow-md transition-all active:scale-95 mb-3">
-                            <i class="fas fa-check-circle mr-2"></i> LƯU LỊCH TRÌNH
-                        </button>
+                       
                         <div class="flex gap-3">
                             <button onclick="saveEco()" class="flex-1 py-3 bg-green-500 hover:bg-green-600 text-white font-bold rounded-xl shadow-md transition-all active:scale-95">
                                 <i class="fas fa-check-circle mr-2"></i> LƯU LỊCH TRÌNH
@@ -1198,6 +1219,27 @@
                             </div>
                         </div>
 
+                        <div class="flex gap-2 mb-2 w-full">
+                            <button onclick="startSmart()" class="flex-1 py-4 bg-purple-500 hover:bg-purple-600 text-white font-bold rounded-xl shadow-md transition-all active:scale-95 text-sm">
+                                <i class="fas fa-play mr-2"></i> Bắt đầu
+                            </button>
+                            <button onclick="cancelSmart()" class="flex-1 py-4 bg-red-100 hover:bg-red-200 text-red-600 font-bold rounded-xl transition-all active:scale-95 text-sm">
+                                <i class="fas fa-stop mr-2"></i> Hủy
+                            </button>
+                        </div>
+
+                        <!-- Thông báo thành công -->
+                        <div id="smart-start-msg" class="items-center justify-center gap-2 px-4 py-2 bg-emerald-50 border border-emerald-200 rounded-xl mb-2" style="display:none;">
+                            <i class="fas fa-check-circle text-emerald-500 text-sm"></i>
+                            <span class="text-emerald-700 text-xs font-bold">Đã bắt đầu chế độ SMART!</span>
+                        </div>
+
+                        <!-- Thông báo hủy -->
+                        <div id="smart-cancel-msg" class="items-center justify-center gap-2 px-4 py-2 bg-red-50 border border-red-200 rounded-xl mb-2" style="display:none;">
+                            <i class="fas fa-times-circle text-red-500 text-sm"></i>
+                            <span class="text-red-700 text-xs font-bold">Đã hủy chế độ SMART!</span>
+                        </div>
+
                         <div class="flex items-center gap-2 text-emerald-500 font-medium px-4 py-2 bg-emerald-50 rounded-full">
                             <i class="fas fa-circle text-[8px] animate-pulse"></i> Model YOLOv8 Active
                         </div>
@@ -1220,6 +1262,12 @@
 
     // ── ĐIỀU HƯỚNG TRANG ─────────────────────────────────
     function openHome() {
+        document.querySelector('header').style.display = 'none';
+        function resetSidebar() {
+            document.querySelectorAll('#sidebar nav a').forEach(a => {
+                a.className = 'flex items-center gap-3 px-4 py-3 text-slate-500 hover:bg-slate-50 hover:text-slate-700 rounded-xl font-medium transition';
+            });
+        }
         document.getElementById('page-history').style.display = 'none';
         document.getElementById('page-report').style.display = 'none';
         document.getElementById('page-home').style.display = 'block';
@@ -1233,6 +1281,13 @@
     }
 
     function openMain() {
+        document.querySelector('header').style.display = '';
+        function resetSidebar() {
+            document.querySelectorAll('#sidebar nav a').forEach(a => {
+                a.className = 'flex items-center gap-3 px-4 py-3 text-slate-500 hover:bg-slate-50 hover:text-slate-700 rounded-xl font-medium transition';
+            });
+        }
+        resetSidebar();
         document.getElementById('page-history').style.display = 'none';
         document.getElementById('page-report').style.display = 'none';
         document.getElementById('page-home').style.display = 'none';
@@ -1241,6 +1296,12 @@
     }
 
     function openSettings() {
+        document.querySelector('header').style.display = 'none';
+        function resetSidebar() {
+            document.querySelectorAll('#sidebar nav a').forEach(a => {
+                a.className = 'flex items-center gap-3 px-4 py-3 text-slate-500 hover:bg-slate-50 hover:text-slate-700 rounded-xl font-medium transition';
+            });
+        }
         document.getElementById('page-history').style.display = 'none';
         document.getElementById('page-report').style.display = 'none';
 
@@ -1420,20 +1481,26 @@
 
     async function saveEco() {
         if (USER_ROLE !== 'admin') { alert('⚠️ Bạn chỉ có quyền xem!'); return; }
-        try {
-            await fetch('/eco/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
-                start_h:document.getElementById('s-h').value, start_m:document.getElementById('s-m').value, start_ap:document.getElementById('s-ap').value,
-                stop_h:document.getElementById('e-h').value,  stop_m:document.getElementById('e-m').value,  stop_ap:document.getElementById('e-ap').value, rpm:60
-            })});
 
-            // Hiện thông báo
-            const msg = document.getElementById('eco-save-msg');
-            msg.style.display = 'flex';
+        // Hiện thông báo NGAY — không chờ API
+        const msg = document.getElementById('eco-save-msg');
+        msg.style.display = 'flex';
+        setTimeout(() => { msg.style.display = 'none'; }, 1000);
 
-            // Ẩn sau 1 giây
-            setTimeout(() => { msg.style.display = 'none'; }, 1000);
-
-        } catch(e) {}
+        // Gọi API sau (không await — không chặn UI)
+        fetch('/eco/save', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                start_h  : document.getElementById('s-h').value,
+                start_m  : document.getElementById('s-m').value,
+                start_ap : document.getElementById('s-ap').value,
+                stop_h   : document.getElementById('e-h').value,
+                stop_m   : document.getElementById('e-m').value,
+                stop_ap  : document.getElementById('e-ap').value,
+                rpm      : ecoSpeed   // ← đổi từ 60 thành ecoSpeed
+            })
+        }).catch(e => {});
     }
 
     // ── POLL SỐ NGƯỜI ─────────────────────────────────────
@@ -1669,6 +1736,12 @@
     };
 
     function openReport() {
+        document.querySelector('header').style.display = 'none';
+        function resetSidebar() {
+            document.querySelectorAll('#sidebar nav a').forEach(a => {
+                a.className = 'flex items-center gap-3 px-4 py-3 text-slate-500 hover:bg-slate-50 hover:text-slate-700 rounded-xl font-medium transition';
+            });
+        }
         document.getElementById('page-history').style.display = 'none';
         document.getElementById('page-home').style.display     = 'none';
         document.getElementById('page-main').style.display     = 'none';
@@ -1824,6 +1897,12 @@
     let currentPeriod = '1m';
 
     function openHistory() {
+        document.querySelector('header').style.display = 'none';
+        function resetSidebar() {
+            document.querySelectorAll('#sidebar nav a').forEach(a => {
+                a.className = 'flex items-center gap-3 px-4 py-3 text-slate-500 hover:bg-slate-50 hover:text-slate-700 rounded-xl font-medium transition';
+            });
+        }
         document.getElementById('page-home').style.display     = 'none';
         document.getElementById('page-main').style.display     = 'none';
         document.getElementById('page-settings').style.display = 'none';
@@ -2063,31 +2142,50 @@
     }
     async function cancelEco() {
         if (USER_ROLE !== 'admin') { alert('⚠️ Bạn chỉ có quyền xem!'); return; }
-        try {
-            await fetch('/eco/cancel', { method: 'POST' });
-            // Hiện thông báo
-            const msg = document.getElementById('eco-save-msg');
-            if (msg) {
-                msg.style.display = 'flex';
-                msg.querySelector('span').innerText = 'Đã hủy lịch trình!';
-                msg.style.background = '#fef2f2';
-                msg.style.borderColor = '#fecdd3';
-                msg.querySelector('i').style.color = '#ef4444';
-                msg.querySelector('span').style.color = '#991b1b';
-                setTimeout(() => {
-                    msg.style.display = 'none';
-                    // Reset màu về mặc định
-                    msg.style.background = '';
-                    msg.style.borderColor = '';
-                    msg.querySelector('i').style.color = '';
-                    msg.querySelector('span').style.color = '';
-                    msg.querySelector('span').innerText = 'Lưu lịch trình thành công!';
-                }, 2000);
-            }
-        } catch(e) {}
+
+        // Hiện thông báo NGAY — không chờ API
+        const msg = document.getElementById('eco-cancel-msg');
+        msg.style.display = 'flex';
+        setTimeout(() => { msg.style.display = 'none'; }, 2000);
+
+        // Gọi API sau (không await)
+        fetch('/eco/cancel', { method: 'POST' }).catch(e => {});
     }
 
-    // ══════════════════════════════════════════════════════
+    function resetSidebar() {
+        document.querySelectorAll('#sidebar nav a').forEach(a => {
+            a.className = 'flex items-center gap-3 px-4 py-3 text-slate-500 hover:bg-slate-50 hover:text-slate-700 rounded-xl font-medium transition';
+        });
+    }
+
+    // ── ECO SPEED ────────────────────────────────────────
+    let ecoSpeed = 33; // mặc định mức 1
+
+    function setEcoSpeed(rpm) {
+        ecoSpeed = rpm;
+        console.log('[ECO] Mức quạt:', rpm, 'RPM');
+    }
+    function startSmart() {
+        const msg = document.getElementById('smart-start-msg');
+        msg.style.display = 'flex';
+        setTimeout(() => { msg.style.display = 'none'; }, 1000);
+        fetch('/set_mode', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({mode: 'Smart'})
+        }).catch(e => {});
+    }
+    function cancelSmart() {
+        const msg = document.getElementById('smart-cancel-msg');
+        msg.style.display = 'flex';
+        setTimeout(() => { msg.style.display = 'none'; }, 1000);
+        fetch('/set_mode', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({mode: 'Manual'})
+        }).catch(e => {});
+    }
+        // ══════════════════════════════════════════════════════
     window.onload = function() {
 
         applyTheme();

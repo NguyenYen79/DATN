@@ -29,7 +29,7 @@ VALID_PASSWORD = '123'
 # CẤU HÌNH CAMERA EZVIZ
 # ====================================================================
 RTSP_URL     = "rtsp://admin:BLMYQK@192.168.50.194:554/h264/ch1/main/av_stream"
-ACCESS_TOKEN = "at.7sgmy75zcd8biv471ofbq0tzciu91xzt-3624rt6whm-12zfhhw-mvo2c6vza"
+ACCESS_TOKEN = "at.djmvrykn6vx89dl3c3b74g53b3jg4imx-7ehcljoo5u-118ingl-i2lkdn3ou"
 DEVICE_SN    = "J83082531"
 CHANNEL      = 1
 BASE_URL     = "https://isgpopen.ezvizlife.com"

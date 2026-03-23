@@ -76,11 +76,11 @@ SPEED_LEVELS = {
     'cao'       : 100,    # 100 RPM → 50.0 Hz
 }
 
-# ── SMART MODE: ngưỡng số người → mức tốc độ ────────────────────────
-SMART_THRESHOLD = [
-    (5,   33.0),    # ≤5  người → mức Thấp  (33 RPM)
-    (10,  66.0),    # ≤10 người → mức TB    (66 RPM)
-    (999, 100.0),   # >10 người → mức Cao   (100 RPM)
+# ── SMART MODE: ngưỡng NHIỆT ĐỘ → mức tốc độ ───────────────────────
+TEMP_THRESHOLD = [
+    (28,  33.0),    # ≤28°C  → mức Thấp  (33 RPM)
+    (35,  66.0),    # ≤35°C  → mức TB    (66 RPM)
+    (999, 100.0),   # >35°C  → mức Cao   (100 RPM)
 ]
 
 # ====================================================================
@@ -174,7 +174,7 @@ def modbus_connect():
             bytesize = 8,
             parity   = 'N',
             stopbits = 1,
-            timeout  = 3,
+            timeout  = 1,    # ← đổi từ 3 xuống 1 giây
         )
         if client.connect():
             modbus_ok = True
@@ -282,13 +282,25 @@ def people_to_rpm(count):
 def smart_fan_thread():
     global _last_auto_rpm
     while True:
-        time.sleep(2)
+        time.sleep(3)
         if not ai_mode:
             _last_auto_rpm = None
             continue
-        rpm = people_to_rpm(people_count)
+
+        # Đọc nhiệt độ thực từ cảm biến
+        temp = read_temperature()
+        if temp is None:
+            continue
+
+        # Tính RPM theo nhiệt độ
+        rpm = 33.0  # mặc định mức thấp
+        for thr, r in TEMP_THRESHOLD:
+            if temp <= thr:
+                rpm = r
+                break
+
         if rpm != _last_auto_rpm:
-            print(f"[SMART] {people_count} người → {rpm} RPM → {rpm_to_hz(rpm)} Hz")
+            print(f"[SMART] Nhiệt độ {temp}°C → {rpm} RPM → {rpm_to_hz(rpm):.1f} Hz")
             run_fan(rpm)
             _last_auto_rpm = rpm
 
@@ -442,6 +454,19 @@ def set_mode():
     ai_mode = (mode == 'Smart')
 
     if mode == 'Smart':
+        print("[MODE] Smart ON — theo dõi nhiệt độ...")
+        # Bật quạt ngay theo nhiệt độ hiện tại
+        temp = read_temperature()
+        if temp is not None:
+            rpm = 33.0
+            for thr, r in TEMP_THRESHOLD:
+                if temp <= thr:
+                    rpm = r
+                    break
+            run_fan(rpm)
+            print(f"[SMART] Khởi động: {temp}°C → {rpm} RPM")
+
+    if mode == 'Smart':
         print("[MODE] Smart ON — Hailo đang quét...")
     elif mode == 'Eco':
         # Không tắt quạt — ECO tự quản lý theo lịch/hẹn giờ
@@ -509,13 +534,27 @@ def modbus_reconnect():
 # ====================================================================
 # ROUTE — NHIỆT ĐỘ
 # ====================================================================
+# ── CẤU HÌNH CẢM BIẾN DS18B20 ───────────────────────────────────────
+DS18B20_PATH = '/sys/bus/w1/devices/28-3c01f0962d2a/temperature'
+
+def read_temperature():
+    try:
+        with open(DS18B20_PATH, 'r') as f:
+            raw  = f.read().strip()
+            print(f"[TEMP] Raw: {raw}")  # ← thêm dòng này
+            temp = float(raw) / 1000.0
+            return round(temp, 1)
+    except Exception as e:
+        print(f"[TEMP] Lỗi đọc cảm biến: {e}")
+        return None
+
 @app.route('/temperature')
 def temperature():
-    temp  = None
+    temp  = read_temperature()
     level = 'Không có cảm biến'
 
     if temp is not None:
-        if   temp < 28: level = 'Chậm'
+        if   temp < 28: level = 'Thấp'
         elif temp < 33: level = 'Trung bình'
         else:           level = 'Cao'
 
@@ -542,7 +581,8 @@ def eco_save():
 
     start = to_24h(data['start_h'], data['start_m'], data['start_ap'])
     stop  = to_24h(data['stop_h'],  data['stop_m'],  data['stop_ap'])
-    eco_schedule = {'start': start, 'stop': stop}
+    eco_rpm = int(data.get('rpm', 33))  # ← thêm dòng này
+    eco_schedule = {'start': start, 'stop': stop, 'rpm': eco_rpm}
     print(f"[ECO] Lịch trình: BẬT {start} — TẮT {stop}")
 
     # ── Kiểm tra ngay lập tức sau khi lưu ──
@@ -550,7 +590,7 @@ def eco_save():
     now = datetime.now().strftime('%H:%M')
     if start <= now < stop:
         print(f"[ECO] {now} đang trong lịch → BẬT quạt ngay")
-        run_fan(66)
+        run_fan(eco_rpm)
     else:
         print(f"[ECO] {now} ngoài lịch → TẮT quạt")
         stop_fan()
@@ -598,7 +638,7 @@ def eco_schedule_thread():
             if start <= now < stop:
                 if not fan_running:
                     print(f"[ECO] {now} trong lịch {start}-{stop} → BẬT quạt")
-                    run_fan(66)
+                    run_fan(eco_schedule.get('rpm', 33))
             else:
                 if fan_running:
                     print(f"[ECO] {now} ngoài lịch {start}-{stop} → TẮT quạt")
