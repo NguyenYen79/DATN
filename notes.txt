@@ -14,3 +14,4 @@ Lệnh check nhiệt độ: vcgencmd measure_temp
 - Stage changed all files:          git add .
 - Commit changes:                   git commit -m "Describe what you changed"
 - Push to GitHub:                   git push origin main
+-Lệnh shut down pi : sudo shutdown -h now
