@@ -5,6 +5,7 @@ B3: chạy lệnh:
     - sudo systemctl restart fanco.service  : để pi cập nhật code app.py
     - sudo systemctl start fanco.service     : chạy dịch vụ ngầm
     - sudo systemctl stop fanco.service     : dừng dịch vụ ngầm
+    - sudo systemctl disable fanco.service   : Tắt chế độ tự khởi động cùng hệ thống
 
 Lệnh check sụt ap: vcgencmd get_throttled
 Lệnh check nhiệt độ: vcgencmd measure_temp

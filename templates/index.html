@@ -221,20 +221,7 @@
                         </button>
                     </div>
 
-                    <!-- Hero banner -->
-                    <div class="rounded-2xl overflow-hidden shadow-sm border border-slate-100"
-                         style="background: linear-gradient(135deg, #064e3b 0%, #065f46 50%, #0f766e 100%);">
-                        <div class="p-6 md:p-8 flex flex-col md:flex-row items-center gap-6">
-                            <div class="flex-shrink-0 p-2 bg-white rounded-3xl shadow-lg" style="box-shadow: 0 8px 32px rgba(0,0,0,0.18);">
-                                <img src="/static/logofarano.jpg" alt="FanCo Logo" class="w-20 h-20 rounded-2xl object-contain">
-                            </div>
-                            <div class="text-center md:text-left">
-                                <div class="text-emerald-300 text-xs font-bold uppercase tracking-widest mb-1">Đồ Án Tốt Nghiệp · 2026</div>
-                                <h2 class="text-white text-2xl md:text-3xl font-black leading-tight mb-2">FanCo AI</h2>
-                                <p class="text-emerald-100 text-sm leading-relaxed">Hệ thống quản lý quạt công nghiệp thông minh sử dụng AI nhận diện người và biến tần tự động điều chỉnh tốc độ nhằm tiết kiệm năng lượng tối ưu.</p>
-                            </div>
-                        </div>
-                    </div>
+                    
 
                     <!-- Thông tin trường -->
                     <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
@@ -244,7 +231,7 @@
 
                         <!-- Tên trường/khoa/bộ môn căn giữa -->
                         <div class="flex-1 text-center">
-                            <p class="text-xs font-bold text-emerald-600 uppercase tracking-wide mb-2">Đơn vị thực hiện</p>
+                            
                             <p class="font-black text-slate-800 text-base leading-snug">Trường Đại học Công Nghệ Kỹ Thuật TP.HCM</p>
                             <p class="text-slate-500 text-sm font-semibold mt-1">Khoa Cơ Khí Chế Tạo Máy</p>
                             <p class="text-slate-500 text-sm font-semibold mt-0.5">Bộ Môn Cơ Điện Tử</p>
@@ -252,6 +239,20 @@
 
                         <!-- Logo khoa -->
                         <img src="/static/FMEE.jpg" alt="Logo Khoa" class="w-16 h-16 object-contain flex-shrink-0">
+                    </div>
+                    <!-- Hero banner -->
+                    <div class="rounded-2xl overflow-hidden shadow-sm border border-slate-100"
+                         style="background: linear-gradient(135deg, #064e3b 0%, #065f46 50%, #0f766e 100%);">
+                        <div class="p-6 md:p-8 flex flex-col md:flex-row items-center gap-6">
+                            <div class="flex-shrink-0 p-2 bg-white rounded-3xl shadow-lg" style="box-shadow: 0 8px 32px rgba(0,0,0,0.18);">
+                                <img src="/static/logofarano.jpg" alt="FanCo Logo" class="w-20 h-20 rounded-2xl object-contain">
+                            </div>
+                            <div class="text-center md:text-left">
+                                <div class="text-emerald-300 text-xs font-bold uppercase tracking-widest mb-1">ĐỒ ÁN TỐT NGHIỆP</div>
+                                <h2 class="text-white text-2xl md:text-3xl font-black leading-tight mb-2">Ứng Dụng Xử Lý Ảnh Trong Điều Khiển Tốc Độ Quạt Định Hướng Tiết Kiệm Năng Lượng</h2>
+                                
+                            </div>
+                        </div>
                     </div>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4">
                             <div class="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
@@ -925,6 +926,12 @@
                                 <i class="fas fa-ban mr-2"></i> TẮT QUẠT
                             </button>
                         </div>
+                        <!-- Thêm dòng này ngay sau -->
+                        <div id="fan-status-bar-smart" class="flex items-center justify-center gap-2 mb-3 font-bold"
+                            style="color:#991b1b; font-size:1.1rem;">
+                            <i class="fas fa-circle" style="font-size:9px"></i>
+                            <span id="fan-status-text-smart">Quạt đã được tắt</span>
+                        </div>
                         <div class="mb-4">
                             <div class="flex items-center justify-between mb-2">
                                 <label class="font-bold text-slate-700 text-sm">Tốc độ (RPM)</label>
@@ -1156,7 +1163,12 @@
                                 </button>
                             </div>
 
-                            
+                            <!-- Status bar ECO -->
+                            <div id="fan-status-bar-eco" class="flex items-center justify-center gap-2 mb-3 font-bold"
+                                style="color:#991b1b; font-size:1.1rem;">
+                                <i class="fas fa-circle" style="font-size:9px"></i>
+                                <span id="fan-status-text-eco">Quạt đã được tắt</span>
+                            </div>
                             
                             <!-- MINI CARDS ECO -->
                             <div class="space-y-2 mb-4 pt-3 border-t border-slate-100">
@@ -1233,7 +1245,12 @@
                                 <i class="fas fa-chart-bar text-sm"></i>
                             </div>
                         </div>
-
+                        <!-- Status bar SMART -->
+                        <div id="fan-status-bar-smart" class="flex items-center justify-center gap-2 mb-3 font-bold"
+                            style="color:#991b1b; font-size:1.1rem;">
+                            
+                            
+                        </div>
                         <div class="flex gap-2 mb-2 w-full">
                             <button onclick="startSmart()" class="flex-1 py-4 bg-purple-500 hover:bg-purple-600 text-white font-bold rounded-xl shadow-md transition-all active:scale-95 text-sm">
                                 <i class="fas fa-play mr-2"></i> Bắt đầu
@@ -1496,13 +1513,12 @@
 
     async function saveEco() {
         if (USER_ROLE !== 'admin') { alert('⚠️ Bạn chỉ có quyền xem!'); return; }
-
-        // Hiện thông báo NGAY — không chờ API
         const msg = document.getElementById('eco-save-msg');
         msg.style.display = 'flex';
         setTimeout(() => { msg.style.display = 'none'; }, 1000);
 
-        // Gọi API sau (không await — không chặn UI)
+        updateFanStatusBar('turning_on'); // ← thêm dòng này
+
         fetch('/eco/save', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
@@ -1513,8 +1529,11 @@
                 stop_h   : document.getElementById('e-h').value,
                 stop_m   : document.getElementById('e-m').value,
                 stop_ap  : document.getElementById('e-ap').value,
-                rpm      : ecoSpeed   // ← đổi từ 60 thành ecoSpeed
+                rpm      : ecoSpeed
             })
+        }).then(r => r.json()).then(data => {
+            // Sau khi server phản hồi mới cập nhật đúng trạng thái
+            updateFanStatusBar('on');  // ← thêm dòng này
         }).catch(e => {});
     }
 
@@ -1523,8 +1542,7 @@
     function startPolling(){
         pollInterval=setInterval(async()=>{
             try{
-                if (document.getElementById('page-settings').style.display !== 'none')
-                    updateSettingsTemp(data.temp);
+                
                 const r=await fetch('/people_count');
                 const d=await r.json();
                 if(d.count!==null){
@@ -1585,6 +1603,12 @@
             updateTempUI(data.temp, data.level);
         } catch(e) {}
     }, 3000);
+    // Sync status bar theo trạng thái thực
+    if (data.running) {
+        updateFanStatusBar('on');
+    } else {
+        updateFanStatusBar('off');
+    }
 
     // ── MODE ──────────────────────────────────────────────
     function setMode(mode) {
@@ -1657,20 +1681,24 @@
 
     async function fanOn() {
         if (USER_ROLE !== 'admin') { alert('⚠️ Bạn chỉ có quyền xem!'); return; }
+        updateFanStatusBar('turning_on');  // ← thêm dòng này
         let rpm = parseFloat(document.getElementById('rpm-slider').value);
-        if (rpm <= 0) rpm = 20;
+        if (rpm <= 0) rpm = 33;
         document.getElementById('rpm-slider').value = rpm;
         previewRPM(rpm);
         await sendRPM(rpm);
+        updateFanStatusBar('on');  // ← thêm dòng này
     }
 
     async function fanOff() {
         if (USER_ROLE !== 'admin') { alert('⚠️ Bạn chỉ có quyền xem!'); return; }
+        updateFanStatusBar('turning_off');  // ← thêm dòng này
         try {
-            await fetch('/fan/stop',{method:'POST'});
+            await fetch('/fan/stop', {method:'POST'});
             updateFanUI(0, 0, false);
             document.getElementById('rpm-slider').value = 0;
             previewRPM(0);
+            updateFanStatusBar('off');  // ← thêm dòng này
         } catch(e) {}
     }
 
@@ -1709,15 +1737,18 @@
 
             updateFanUI(data.rpm, data.hz, data.running);
 
-            if (!data.ai_mode)
+            if (!data.ai_mode && !sliderDragging)
                 document.getElementById('rpm-slider').value = Math.round(data.rpm);
 
-            // Smart panel
-            if (data.ai_mode && data.people !== null) {
+            // Smart panel — luôn cập nhật RPM, chỉ cần quạt đang chạy
+            document.getElementById('smart-rpm-disp').innerText = data.running ? Math.round(data.rpm) : '—';
+            document.getElementById('smart-hz-disp').innerText  = data.running ? '/ ' + parseFloat(data.hz).toFixed(1) + ' Hz' : '';
+
+            if (data.smart_active && data.people !== null) {
                 document.getElementById('people-count-overlay').innerText = data.people + ' người';
                 document.getElementById('smart-people-lbl').innerText     = data.people + ' người';
-                document.getElementById('smart-rpm-disp').innerText       = Math.round(data.rpm);
-                document.getElementById('smart-hz-disp').innerText        = '/ ' + parseFloat(data.hz).toFixed(1) + ' Hz';
+            } else {
+                document.getElementById('smart-people-lbl').innerText = '— người';
             }
 
             // Cập nhật nhiệt độ từ fan/status (nếu có)
@@ -2158,13 +2189,15 @@
     async function cancelEco() {
         if (USER_ROLE !== 'admin') { alert('⚠️ Bạn chỉ có quyền xem!'); return; }
 
-        // Hiện thông báo NGAY — không chờ API
+        updateFanStatusBar('turning_off'); // ← thêm dòng này
+
         const msg = document.getElementById('eco-cancel-msg');
         msg.style.display = 'flex';
         setTimeout(() => { msg.style.display = 'none'; }, 2000);
 
-        // Gọi API sau (không await)
-        fetch('/eco/cancel', { method: 'POST' }).catch(e => {});
+        fetch('/eco/cancel', { method: 'POST' })
+            .then(() => { updateFanStatusBar('off'); }) // ← thêm dòng này
+            .catch(e => {});
     }
 
     function resetSidebar() {
@@ -2181,28 +2214,73 @@
         console.log('[ECO] Mức quạt:', rpm, 'RPM');
     }
     function startSmart() {
+        updateFanStatusBar('turning_on');
         const msg = document.getElementById('smart-start-msg');
         msg.style.display = 'flex';
         setTimeout(() => { msg.style.display = 'none'; }, 1000);
-        fetch('/set_mode', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({mode: 'Smart'})
-        }).catch(e => {});
+        fetch('/smart/start', { method:'POST' })
+            .then(() => { updateFanStatusBar('on'); })
+            .catch(e=>{});
     }
+
     function cancelSmart() {
+        updateFanStatusBar('turning_off');
         const msg = document.getElementById('smart-cancel-msg');
         msg.style.display = 'flex';
         setTimeout(() => { msg.style.display = 'none'; }, 1000);
-        fetch('/set_mode', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({mode: 'Manual'})
-        }).catch(e => {});
+        fetch('/smart/stop', { method:'POST' })
+            .then(() => { updateFanStatusBar('off'); })
+            .catch(e=>{});
+    }
+
+    // ── TRACKING SLIDER DRAG ─────────────────────────────
+    let sliderDragging = false;
+    document.addEventListener('DOMContentLoaded', () => {
+        const slider = document.getElementById('rpm-slider');
+        if (slider) {
+            slider.addEventListener('mousedown',  () => { sliderDragging = true; });
+            slider.addEventListener('touchstart', () => { sliderDragging = true; });
+            slider.addEventListener('mouseup',    () => { sliderDragging = false; });
+            slider.addEventListener('touchend',   () => { sliderDragging = false; });
+        }
+    });
+
+    // ── TRẠNG THÁI QUẠT STATUS BAR ───────────────────────
+    function updateFanStatusBar(state) {
+        const ids = [
+            { bar: 'fan-status-bar',       text: 'fan-status-text' },
+            { bar: 'fan-status-bar-eco',   text: 'fan-status-text-eco' },
+            { bar: 'fan-status-bar-smart', text: 'fan-status-text-smart' },
+        ];
+
+        const styles = {
+            'turning_on'  : { color:'#166534', icon:'fa-circle-notch fa-spin', msg:'Đang bật quạt...' },
+            'on'          : { color:'#065f46', icon:'fa-circle',               msg:'Quạt đã được bật' },
+            'turning_off' : { color:'#9a3412', icon:'fa-circle-notch fa-spin', msg:'Đang tắt quạt...' },
+            'off'         : { color:'#991b1b', icon:'fa-circle',               msg:'Quạt đã được tắt' },
+        };
+
+        const s = styles[state];
+        ids.forEach(({ bar, text }) => {
+            const barEl  = document.getElementById(bar);
+            const textEl = document.getElementById(text);
+            if (!barEl || !textEl) return;
+            barEl.style.color = s.color;
+            barEl.querySelector('i').className = `fas ${s.icon}`;
+            textEl.innerText = s.msg;
+        });
     }
         // ══════════════════════════════════════════════════════
     window.onload = function() {
 
+        const slider = document.getElementById('rpm-slider');
+        if (slider) {
+            slider.addEventListener('mousedown',  () => { sliderDragging = true; });
+            slider.addEventListener('touchstart', () => { sliderDragging = true; });
+            slider.addEventListener('mouseup',    () => { sliderDragging = false; });
+            slider.addEventListener('touchend',   () => { sliderDragging = false; });
+        }
+        updateFanStatusBar('off'); // mặc định khi mở web
         applyTheme();
         handleSidebar();
         updateTime();

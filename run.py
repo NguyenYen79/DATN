@@ -5,7 +5,8 @@ import threading
 import time
 import concurrent.futures
 import numpy as np
-import os, signal
+import os
+from datetime import datetime
 
 # ====================================================================
 # HAILO-8L — import có bảo vệ
@@ -26,7 +27,6 @@ except ImportError as e:
 # ====================================================================
 try:
     from pymodbus.client import ModbusSerialClient
-    import pymodbus
     PYMODBUS_AVAILABLE = True
 except ImportError:
     PYMODBUS_AVAILABLE = False
@@ -69,31 +69,43 @@ REG_COMMAND   = 0x02
 REG_STATUS    = 0x1000
 REG_RUN_FREQ  = 0x1003
 
-# ── 3 MỨC TỐC ĐỘ ────────────────────────────────────────────────────
-SPEED_LEVELS = {
-    'thap'      : 33,     # 33 RPM  → 16.5 Hz
-    'trung_binh': 66,     # 66 RPM  → 33.0 Hz
-    'cao'       : 100,    # 100 RPM → 50.0 Hz
-}
-
-# ── SMART MODE: ngưỡng NHIỆT ĐỘ → mức tốc độ ───────────────────────
+# ── SMART MODE: ngưỡng NHIỆT ĐỘ → mức tốc độ ────────────────────────
 TEMP_THRESHOLD = [
-    (28,  33.0),    # ≤28°C  → mức Thấp  (33 RPM)
-    (35,  66.0),    # ≤35°C  → mức TB    (66 RPM)
-    (999, 100.0),   # >35°C  → mức Cao   (100 RPM)
+    (28,  33.0),    # ≤28°C → mức Thấp  (33 RPM)
+    (35,  66.0),    # ≤35°C → mức TB    (66 RPM)
+    (999, 100.0),   # >35°C → mức Cao   (100 RPM)
 ]
 
 # ====================================================================
 # TRẠNG THÁI TOÀN CỤC
 # ====================================================================
 people_count   = 0
-ai_mode        = False
 fan_rpm        = 0.0
 fan_running    = False
 fan_lock       = threading.Lock()
-_last_auto_rpm = None
 modbus_ok      = False
 client         = None
+
+# ── TRẠNG THÁI CHẾ ĐỘ ───────────────────────────────────────────────
+current_mode   = 'Manual'   # 'Manual' | 'Eco' | 'Smart'
+smart_active   = False      # True khi nhấn "Bắt đầu SMART"
+eco_schedule   = None       # {'start':'09:00','stop':'10:00','rpm':33}
+_last_smart_rpm = None
+
+# ====================================================================
+# CẢM BIẾN DS18B20
+# ====================================================================
+DS18B20_PATH = '/sys/bus/w1/devices/28-3c01f0962d2a/temperature'
+
+def read_temperature():
+    try:
+        with open(DS18B20_PATH, 'r') as f:
+            raw  = f.read().strip()
+            temp = float(raw) / 1000.0
+            return round(temp, 1)
+    except Exception as e:
+        print(f"[TEMP] Lỗi đọc cảm biến: {e}")
+        return None
 
 # ====================================================================
 # HAILO MODEL CLASS
@@ -102,19 +114,14 @@ class HailoYOLO:
     def __init__(self, hef_path: str):
         self.hef     = HEF(hef_path)
         self.target  = VDevice()
-
         cfg_params         = ConfigureParams.create_from_hef(self.hef, interface=HailoStreamInterface.PCIe)
         self.network_group = self.target.configure(self.hef, cfg_params)[0]
         self.ng_params     = self.network_group.create_params()
-
         self.in_info  = self.hef.get_input_vstream_infos()[0]
         self.out_info = self.hef.get_output_vstream_infos()[0]
-
         self.in_h, self.in_w = self.in_info.shape[0], self.in_info.shape[1]
-
         self.in_params  = InputVStreamParams.make(self.network_group)
         self.out_params = OutputVStreamParams.make(self.network_group)
-
         print(f"[HAILO] Model: {hef_path} | Input: {self.in_h}×{self.in_w}")
 
     def preprocess(self, frame):
@@ -126,29 +133,23 @@ class HailoYOLO:
         h, w    = frame.shape[:2]
         data    = {self.in_info.name: self.preprocess(frame)}
         raw_all = pipeline.infer(data)
-
         results = []
         try:
             out_name    = self.out_info.name
             batch       = raw_all[out_name]
             classes     = batch[0]
             person_dets = classes[0]
-
             for det in person_dets:
                 score = float(det[4])
-                if score < 0.45:
-                    continue
+                if score < 0.45: continue
                 ymin, xmin, ymax, xmax = float(det[0]), float(det[1]), float(det[2]), float(det[3])
                 x1 = max(0, int(xmin * w)); y1 = max(0, int(ymin * h))
                 x2 = min(w, int(xmax * w)); y2 = min(h, int(ymax * h))
                 if x2 > x1 and y2 > y1:
                     results.append((x1, y1, x2, y2, score))
-
         except Exception as e:
             print(f"[HAILO INFER] Lỗi: {e}")
-
         return results
-
 
 hailo_model = None
 if HAILO_AVAILABLE:
@@ -169,19 +170,14 @@ def modbus_connect():
         return False
     try:
         client = ModbusSerialClient(
-            port     = MODBUS_PORT,
-            baudrate = BAUDRATE,
-            bytesize = 8,
-            parity   = 'N',
-            stopbits = 1,
-            timeout  = 1,    # ← đổi từ 3 xuống 1 giây
+            port=MODBUS_PORT, baudrate=BAUDRATE,
+            bytesize=8, parity='N', stopbits=1, timeout=1,
         )
         if client.connect():
             modbus_ok = True
             print(f"[MODBUS] ✅ Kết nối: {MODBUS_PORT}")
             return True
         modbus_ok = False
-        print(f"[MODBUS] ❌ Không kết nối được: {MODBUS_PORT}")
         return False
     except Exception as e:
         modbus_ok = False
@@ -205,7 +201,6 @@ def _read(reg, count=1):
 # QUY ĐỔI RPM ↔ HZ
 # ====================================================================
 def rpm_to_value(rpm):
-    """RPM → register value (10000 = 50Hz = 100RPM)"""
     rpm = max(0.0, min(float(rpm), MAX_RPM))
     hz  = (rpm / MAX_RPM) * MAX_FREQ_HZ
     return int((hz / MAX_FREQ_HZ) * 10000)
@@ -213,11 +208,8 @@ def rpm_to_value(rpm):
 def rpm_to_hz(rpm):
     return (max(0.0, min(float(rpm), MAX_RPM)) / MAX_RPM) * MAX_FREQ_HZ
 
-def hz_to_rpm(hz):
-    return float(hz) * 2.0
-
-def val_to_hz(v):
-    return round((v / 10000) * MAX_FREQ_HZ, 1)
+def hz_to_rpm(hz):   return float(hz) * 2.0
+def val_to_hz(v):    return round((v / 10000) * MAX_FREQ_HZ, 1)
 
 # ====================================================================
 # ĐIỀU KHIỂN BIẾN TẦN
@@ -227,21 +219,16 @@ def set_speed_rpm(rpm):
     if not r.isError():
         print(f"[FAN] Set {rpm:.1f} RPM → {rpm_to_hz(rpm):.1f} Hz")
         return True
-    if modbus_ok: print(f"[FAN] Lỗi set speed")
     return False
 
 def start_motor():
     r = _write(REG_COMMAND, 1)
-    if not r.isError():
-        print("[FAN] START")
-        return True
+    if not r.isError(): print("[FAN] START"); return True
     return False
 
 def stop_motor():
     r = _write(REG_COMMAND, 6)
-    if not r.isError():
-        print("[FAN] STOP")
-        return True
+    if not r.isError(): print("[FAN] STOP"); return True
     return False
 
 def read_hw_status():
@@ -249,11 +236,11 @@ def read_hw_status():
     f = _read(REG_RUN_FREQ)
     if not s.isError() and not f.isError():
         fhz  = val_to_hz(f.registers[0])
-        frpm = hz_to_rpm(fhz)
-        return s.registers[0], fhz, frpm
+        return s.registers[0], fhz, hz_to_rpm(fhz)
     return None, None, None
 
 def run_fan(rpm):
+    """Bật quạt với tốc độ rpm — dùng chung cho mọi chế độ"""
     global fan_rpm, fan_running
     rpm = max(0.0, min(float(rpm), MAX_RPM))
     with fan_lock:
@@ -265,46 +252,70 @@ def run_fan(rpm):
     return True
 
 def stop_fan():
+    """Tắt quạt — dùng chung cho mọi chế độ"""
     global fan_rpm, fan_running
     with fan_lock:
         stop_motor()
         fan_rpm     = 0.0
         fan_running = False
 
-def people_to_rpm(count):
-    for thr, rpm in SMART_THRESHOLD:
-        if count <= thr: return rpm
-    return MAX_RPM
-
 # ====================================================================
-# SMART MODE THREAD
+# SMART MODE THREAD — chỉ chạy khi smart_active = True
 # ====================================================================
 def smart_fan_thread():
-    global _last_auto_rpm
+    global _last_smart_rpm
     while True:
         time.sleep(3)
-        if not ai_mode:
-            _last_auto_rpm = None
+        if not smart_active:
+            _last_smart_rpm = None
             continue
 
-        # Đọc nhiệt độ thực từ cảm biến
         temp = read_temperature()
         if temp is None:
             continue
 
-        # Tính RPM theo nhiệt độ
-        rpm = 33.0  # mặc định mức thấp
+        rpm = 33.0
         for thr, r in TEMP_THRESHOLD:
             if temp <= thr:
                 rpm = r
                 break
 
-        if rpm != _last_auto_rpm:
-            print(f"[SMART] Nhiệt độ {temp}°C → {rpm} RPM → {rpm_to_hz(rpm):.1f} Hz")
+        if rpm != _last_smart_rpm:
+            print(f"[SMART] {temp}°C → {rpm} RPM")
             run_fan(rpm)
-            _last_auto_rpm = rpm
+            _last_smart_rpm = rpm
 
 threading.Thread(target=smart_fan_thread, daemon=True).start()
+
+# ====================================================================
+# ECO SCHEDULE THREAD — chỉ chạy khi eco_schedule != None
+# ====================================================================
+def eco_schedule_thread():
+    while True:
+        time.sleep(10)
+        try:
+            if eco_schedule is None or current_mode != 'Eco':
+                continue
+            if smart_active:
+                continue
+
+            now   = datetime.now().strftime('%H:%M')
+            start = eco_schedule['start']
+            stop  = eco_schedule['stop']
+            rpm   = eco_schedule.get('rpm', 33)
+
+            if start <= now < stop:
+                if not fan_running:
+                    print(f"[ECO] {now} trong lịch → BẬT quạt {rpm} RPM")
+                    run_fan(rpm)
+            else:
+                if fan_running:
+                    print(f"[ECO] {now} ngoài lịch → TẮT quạt")
+                    stop_fan()
+        except Exception as e:
+            print(f"[ECO] Lỗi thread: {e}")
+
+threading.Thread(target=eco_schedule_thread, daemon=True).start()
 
 # ====================================================================
 # PTZ
@@ -316,12 +327,10 @@ def move_c6n(direction, duration=0):
                 requests.post(f"{BASE_URL}/api/lapp/device/ptz/stop",
                     data={"accessToken": ACCESS_TOKEN, "deviceSerial": DEVICE_SN,
                           "channelNo": CHANNEL, "direction": d}, timeout=3)
-            print("[PTZ] STOP")
         else:
-            r = requests.post(f"{BASE_URL}/api/lapp/device/ptz/start",
+            requests.post(f"{BASE_URL}/api/lapp/device/ptz/start",
                 data={"accessToken": ACCESS_TOKEN, "deviceSerial": DEVICE_SN,
                       "channelNo": CHANNEL, "direction": DIR_MAP[direction], "speed": 2}, timeout=3)
-            print(f"[PTZ {direction}] {r.text}")
             if duration > 0:
                 time.sleep(duration)
                 move_c6n("STOP")
@@ -335,28 +344,23 @@ def _draw_detections(frame, detections):
     for (x1, y1, x2, y2, conf) in detections:
         cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 100), 2)
         cv2.putText(frame, f"Person {conf:.2f}",
-                    (x1, y1 - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 100), 2)
+                    (x1, y1-8), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 100), 2)
 
 def generate_frames():
     global people_count
-
     camera = cv2.VideoCapture(RTSP_URL)
     camera.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
     if HAILO_AVAILABLE and hailo_model is not None:
-        print("[STREAM] Mở Hailo pipeline...")
         with InferVStreams(hailo_model.network_group,
-                           hailo_model.in_params,
-                           hailo_model.out_params) as pipeline:
+                          hailo_model.in_params, hailo_model.out_params) as pipeline:
             with hailo_model.network_group.activate(hailo_model.ng_params):
-                print("[STREAM] Hailo pipeline READY")
                 while True:
                     ok, frame = camera.read()
-                    if not ok:
-                        break
-                    if ai_mode:
+                    if not ok: break
+                    if smart_active:
                         try:
-                            dets         = hailo_model.infer(pipeline, frame)
+                            dets = hailo_model.infer(pipeline, frame)
                             people_count = len(dets)
                             _draw_detections(frame, dets)
                         except Exception as e:
@@ -367,13 +371,12 @@ def generate_frames():
         print("[STREAM] Hailo không khả dụng — chạy fallback")
         while True:
             ok, frame = camera.read()
-            if not ok:
-                break
+            if not ok: break
             _overlay_text(frame)
             yield _encode(frame)
 
 def _overlay_text(frame):
-    if ai_mode:
+    if smart_active:
         cv2.putText(frame,
             f"People: {people_count}  |  Fan: {fan_rpm:.0f} RPM / {rpm_to_hz(fan_rpm):.1f} Hz",
             (10, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 255, 100), 2)
@@ -445,47 +448,63 @@ def ptz_control():
     return jsonify({'status': 'success'})
 
 # ====================================================================
-# ROUTES — AI MODE
+# ROUTES — CHUYỂN CHẾ ĐỘ
 # ====================================================================
 @app.route('/set_mode', methods=['POST'])
 def set_mode():
-    global ai_mode, _last_auto_rpm
-    mode    = request.get_json().get('mode', 'Manual')
-    ai_mode = (mode == 'Smart')
+    """
+    Chỉ ghi nhận chế độ hiện tại.
+    KHÔNG tự động bật/tắt quạt — để người dùng quyết định.
+    """
+    global current_mode
+    mode = request.get_json().get('mode', 'Manual')
+    current_mode = mode
+    print(f"[MODE] Chuyển sang: {mode}")
+    return jsonify({'status': 'ok', 'mode': mode, 'ai_mode': smart_active})
 
-    if mode == 'Smart':
-        print("[MODE] Smart ON — theo dõi nhiệt độ...")
-        # Bật quạt ngay theo nhiệt độ hiện tại
+# ====================================================================
+# ROUTES — SMART MODE
+# ====================================================================
+@app.route('/smart/start', methods=['POST'])
+def smart_start():
+    global smart_active, _last_smart_rpm
+    if not session.get('logged_in'):
+        return jsonify({'status': 'error'}), 401
+    smart_active    = True
+    _last_smart_rpm = None
+
+    def _start():
         temp = read_temperature()
+        rpm  = 33.0
         if temp is not None:
-            rpm = 33.0
             for thr, r in TEMP_THRESHOLD:
                 if temp <= thr:
                     rpm = r
                     break
-            run_fan(rpm)
-            print(f"[SMART] Khởi động: {temp}°C → {rpm} RPM")
+        run_fan(rpm)
+        print(f"[SMART] Bắt đầu: {temp}°C → {rpm} RPM")
 
-    if mode == 'Smart':
-        print("[MODE] Smart ON — Hailo đang quét...")
-    elif mode == 'Eco':
-        # Không tắt quạt — ECO tự quản lý theo lịch/hẹn giờ
-        _last_auto_rpm = None
-        print("[MODE] Eco — quạt giữ nguyên, chờ lịch trình")
-    else:
-        # Manual — giữ nguyên trạng thái quạt
-        _last_auto_rpm = None
-        print("[MODE] Manual — quạt giữ nguyên")
+    threading.Thread(target=_start, daemon=True).start()
+    return jsonify({'status': 'ok', 'smart_active': True})
 
-    return jsonify({'status': 'ok', 'ai_mode': ai_mode,
-                    'hailo': HAILO_AVAILABLE})
+@app.route('/smart/stop', methods=['POST'])
+def smart_stop():
+    global smart_active, _last_smart_rpm
+    if not session.get('logged_in'):
+        return jsonify({'status': 'error'}), 401
+    smart_active    = False
+    _last_smart_rpm = None
+
+    # Chạy trong thread riêng
+    threading.Thread(target=stop_fan, daemon=True).start()
+    return jsonify({'status': 'ok', 'smart_active': False})
 
 @app.route('/people_count')
 def get_people_count():
-    return jsonify({'count': people_count if ai_mode else None})
+    return jsonify({'count': people_count if smart_active else None})
 
 # ====================================================================
-# ROUTES — BIẾN TẦN
+# ROUTES — BIẾN TẦN (Manual dùng trực tiếp)
 # ====================================================================
 @app.route('/fan/set_rpm', methods=['POST'])
 def fan_set_rpm():
@@ -493,12 +512,7 @@ def fan_set_rpm():
         return jsonify({'status': 'error'}), 401
     rpm = float(request.get_json().get('rpm', 0))
     run_fan(rpm)
-    return jsonify({
-        'status' : 'ok',
-        'rpm'    : fan_rpm,
-        'hz'     : rpm_to_hz(fan_rpm),
-        'modbus' : modbus_ok
-    })
+    return jsonify({'status':'ok', 'rpm':fan_rpm, 'hz':rpm_to_hz(fan_rpm), 'modbus':modbus_ok})
 
 @app.route('/fan/stop', methods=['POST'])
 def fan_stop_route():
@@ -513,15 +527,16 @@ def fan_status():
         return jsonify({'status': 'error'}), 401
     _, hw_hz, hw_rpm = read_hw_status()
     return jsonify({
-        'rpm'    : fan_rpm,
-        'hz'     : rpm_to_hz(fan_rpm),
-        'running': fan_running,
-        'hw_hz'  : hw_hz,
-        'hw_rpm' : hw_rpm,
-        'people' : people_count if ai_mode else None,
-        'ai_mode': ai_mode,
-        'modbus' : modbus_ok,
-        'hailo'  : HAILO_AVAILABLE,
+        'rpm'         : fan_rpm,
+        'hz'          : rpm_to_hz(fan_rpm),
+        'running'     : fan_running,
+        'hw_hz'       : hw_hz,
+        'hw_rpm'      : hw_rpm,
+        'people'      : people_count if smart_active else None,
+        'ai_mode'     : smart_active,
+        'smart_active': smart_active,
+        'modbus'      : modbus_ok,
+        'hailo'       : HAILO_AVAILABLE,
     })
 
 @app.route('/modbus/reconnect', methods=['POST'])
@@ -534,38 +549,19 @@ def modbus_reconnect():
 # ====================================================================
 # ROUTE — NHIỆT ĐỘ
 # ====================================================================
-# ── CẤU HÌNH CẢM BIẾN DS18B20 ───────────────────────────────────────
-DS18B20_PATH = '/sys/bus/w1/devices/28-3c01f0962d2a/temperature'
-
-def read_temperature():
-    try:
-        with open(DS18B20_PATH, 'r') as f:
-            raw  = f.read().strip()
-            print(f"[TEMP] Raw: {raw}")  # ← thêm dòng này
-            temp = float(raw) / 1000.0
-            return round(temp, 1)
-    except Exception as e:
-        print(f"[TEMP] Lỗi đọc cảm biến: {e}")
-        return None
-
 @app.route('/temperature')
 def temperature():
     temp  = read_temperature()
     level = 'Không có cảm biến'
-
     if temp is not None:
         if   temp < 28: level = 'Thấp'
-        elif temp < 33: level = 'Trung bình'
+        elif temp < 35: level = 'Trung bình'
         else:           level = 'Cao'
-
     return jsonify({'temp': temp, 'level': level})
 
 # ====================================================================
-# ROUTE — ECO SAVE
+# ROUTE — ECO
 # ====================================================================
-# ── BIẾN LƯU LỊCH TRÌNH ECO ─────────────────────────────────────────
-eco_schedule = None   # {'start': '09:30', 'stop': '10:00'}
-
 @app.route('/eco/save', methods=['POST'])
 def eco_save():
     global eco_schedule
@@ -575,18 +571,17 @@ def eco_save():
 
     def to_24h(h, m, ap):
         h = int(h); m = int(m)
-        if ap == 'PM' and h != 12: h += 12
         if ap == 'AM' and h == 12: h = 0
+        if ap == 'PM' and h != 12: h += 12
         return f"{h:02d}:{m:02d}"
 
-    start = to_24h(data['start_h'], data['start_m'], data['start_ap'])
-    stop  = to_24h(data['stop_h'],  data['stop_m'],  data['stop_ap'])
-    eco_rpm = int(data.get('rpm', 33))  # ← thêm dòng này
+    start   = to_24h(data['start_h'], data['start_m'], data['start_ap'])
+    stop    = to_24h(data['stop_h'],  data['stop_m'],  data['stop_ap'])
+    eco_rpm = int(data.get('rpm', 33))
     eco_schedule = {'start': start, 'stop': stop, 'rpm': eco_rpm}
-    print(f"[ECO] Lịch trình: BẬT {start} — TẮT {stop}")
+    print(f"[ECO] Lịch trình: BẬT {start} — TẮT {stop} | {eco_rpm} RPM")
 
-    # ── Kiểm tra ngay lập tức sau khi lưu ──
-    from datetime import datetime
+    # Kiểm tra ngay lập tức
     now = datetime.now().strftime('%H:%M')
     if start <= now < stop:
         print(f"[ECO] {now} đang trong lịch → BẬT quạt ngay")
@@ -596,18 +591,6 @@ def eco_save():
         stop_fan()
 
     return jsonify({'status': 'ok', 'start': start, 'stop': stop})
-
-# ====================================================================
-# ROUTE — CÀI ĐẶT NGƯỠNG NHIỆT ĐỘ
-# ====================================================================
-@app.route('/settings/temp_threshold', methods=['POST'])
-def settings_temp_threshold():
-    if not session.get('logged_in'):
-        return jsonify({'status': 'error'}), 401
-    data = request.get_json()
-    print(f"[SETTINGS] Ngưỡng nhiệt: {data}")
-    # TODO: cập nhật SMART_THRESHOLD động nếu cần
-    return jsonify({'status': 'ok'})
 
 @app.route('/eco/cancel', methods=['POST'])
 def eco_cancel():
@@ -620,35 +603,19 @@ def eco_cancel():
     return jsonify({'status': 'ok'})
 
 # ====================================================================
+# ROUTE — CÀI ĐẶT NGƯỠNG NHIỆT ĐỘ
+# ====================================================================
+@app.route('/settings/temp_threshold', methods=['POST'])
+def settings_temp_threshold():
+    if not session.get('logged_in'):
+        return jsonify({'status': 'error'}), 401
+    data = request.get_json()
+    print(f"[SETTINGS] Ngưỡng nhiệt: {data}")
+    return jsonify({'status': 'ok'})
+
+# ====================================================================
 # KHỞI ĐỘNG
 # ====================================================================
-# ── ECO SCHEDULE THREAD ──────────────────────────────────────────────
-def eco_schedule_thread():
-    while True:
-        time.sleep(10)
-        try:
-            from datetime import datetime
-            if eco_schedule is None:
-                continue
-
-            now   = datetime.now().strftime('%H:%M')
-            start = eco_schedule['start']
-            stop  = eco_schedule['stop']
-
-            if start <= now < stop:
-                if not fan_running:
-                    print(f"[ECO] {now} trong lịch {start}-{stop} → BẬT quạt")
-                    run_fan(eco_schedule.get('rpm', 33))
-            else:
-                if fan_running:
-                    print(f"[ECO] {now} ngoài lịch {start}-{stop} → TẮT quạt")
-                    stop_fan()
-
-        except Exception as e:
-            print(f"[ECO] Lỗi thread: {e}")
-
-threading.Thread(target=eco_schedule_thread, daemon=True).start()
-
 if __name__ == '__main__':
     os.system("fuser -k 5000/tcp 2>/dev/null || true")
     time.sleep(0.5)
