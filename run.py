@@ -70,11 +70,12 @@ REG_STATUS    = 0x1000
 REG_RUN_FREQ  = 0x1003
 
 # ── SMART MODE: ngưỡng NHIỆT ĐỘ → mức tốc độ ────────────────────────
-TEMP_THRESHOLD = [
-    (28,  33.0),    # ≤28°C → mức Thấp  (33 RPM)
-    (35,  66.0),    # ≤35°C → mức TB    (66 RPM)
-    (999, 100.0),   # >35°C → mức Cao   (100 RPM)
+TEMP_THRESHOLD_DEFAULT = [
+    (28,  33.0),
+    (35,  66.0),
+    (999, 100.0),
 ]
+TEMP_THRESHOLD = list(TEMP_THRESHOLD_DEFAULT)
 
 # ====================================================================
 # TRẠNG THÁI TOÀN CỤC
@@ -607,11 +608,43 @@ def eco_cancel():
 # ====================================================================
 @app.route('/settings/temp_threshold', methods=['POST'])
 def settings_temp_threshold():
+    global TEMP_THRESHOLD
     if not session.get('logged_in'):
         return jsonify({'status': 'error'}), 401
     data = request.get_json()
-    print(f"[SETTINGS] Ngưỡng nhiệt: {data}")
+    low_max  = float(data.get('low_max',  28))
+    mid_max  = float(data.get('mid_max',  35))
+    low_rpm  = float(data.get('low_rpm',  33))
+    mid_rpm  = float(data.get('mid_rpm',  66))
+    high_rpm = float(data.get('high_rpm', 100))
+    TEMP_THRESHOLD = [
+        (low_max,  low_rpm),
+        (mid_max,  mid_rpm),
+        (999,      high_rpm),
+    ]
+    print(f"[SETTINGS] Ngưỡng mới: {TEMP_THRESHOLD}")
     return jsonify({'status': 'ok'})
+
+@app.route('/settings/temp_threshold/reset', methods=['POST'])
+def settings_temp_threshold_reset():
+    global TEMP_THRESHOLD
+    if not session.get('logged_in'):
+        return jsonify({'status': 'error'}), 401
+    TEMP_THRESHOLD = list(TEMP_THRESHOLD_DEFAULT)
+    print(f"[SETTINGS] Reset về mặc định: {TEMP_THRESHOLD}")
+    return jsonify({'status': 'ok'})
+
+@app.route('/settings/temp_threshold/get')
+def settings_temp_threshold_get():
+    if not session.get('logged_in'):
+        return jsonify({'status': 'error'}), 401
+    return jsonify({
+        'low_max' : TEMP_THRESHOLD[0][0],
+        'mid_max' : TEMP_THRESHOLD[1][0],
+        'low_rpm' : TEMP_THRESHOLD[0][1],
+        'mid_rpm' : TEMP_THRESHOLD[1][1],
+        'high_rpm': TEMP_THRESHOLD[2][1],
+    })
 
 # ====================================================================
 # KHỞI ĐỘNG

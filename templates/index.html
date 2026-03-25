@@ -1346,7 +1346,22 @@
         document.querySelectorAll('#sidebar nav a')[1].className =
             'flex items-center gap-3 px-4 py-3 bg-orange-50 text-orange-600 rounded-xl font-semibold';
         updateSettings();
-    }
+        // Load giá trị hiện tại từ server khi mở trang
+        fetch('/settings/temp_threshold/get')
+            .then(r => r.json())
+            .then(data => {
+                if (data.status === 'error') return;
+                document.getElementById('low-max').value  = data.low_max;
+                document.getElementById('mid-max').value  = data.mid_max;
+                document.getElementById('low-rpm').value  = data.low_rpm;
+                document.getElementById('mid-rpm').value  = data.mid_rpm;
+                document.getElementById('high-rpm').value = data.high_rpm;
+                document.getElementById('low-rpm-slider').value  = data.low_rpm;
+                document.getElementById('mid-rpm-slider').value  = data.mid_rpm;
+                document.getElementById('high-rpm-slider').value = data.high_rpm;
+                updateSettings();
+            }).catch(e => {});
+            }
 
     // ── NGƯỠNG NHIỆT ─────────────────────────────────────
     const DEFAULT_SETTINGS = { lowMax:25, midMax:32, lowRpm:30, midRpm:60, highRpm:100 };
@@ -1460,18 +1475,66 @@
             high_rpm : parseInt(document.getElementById('high-rpm').value),
         };
         try {
-            await fetch('/settings/temp_threshold', {
+            const res = await fetch('/settings/temp_threshold', {
                 method:'POST', headers:{'Content-Type':'application/json'},
                 body: JSON.stringify(payload)
             });
-            const btn = document.querySelector('#page-settings button.bg-emerald-500');
-            btn.innerHTML = '<i class="fas fa-check mr-2"></i> Đã lưu!';
-            btn.classList.replace('bg-emerald-500','bg-green-600');
-            setTimeout(() => {
-                btn.innerHTML = '<i class="fas fa-save mr-2"></i> Lưu cài đặt';
-                    btn.classList.replace('bg-green-600','bg-emerald-500');
-                }, 2000);
-            } catch(e) {}
+            const data = await res.json();
+            if (data.status === 'ok') {
+                showSettingsMsg('save');
+            }
+        } catch(e) {
+            alert('Lỗi kết nối server!');
+        }
+    }
+
+    async function resetSettings() {
+        document.getElementById('low-max').value  = 28;
+        document.getElementById('mid-max').value  = 35;
+        document.getElementById('low-rpm').value  = 33;
+        document.getElementById('mid-rpm').value  = 66;
+        document.getElementById('high-rpm').value = 100;
+        document.getElementById('low-rpm-slider').value  = 33;
+        document.getElementById('mid-rpm-slider').value  = 66;
+        document.getElementById('high-rpm-slider').value = 100;
+        updateSettings();
+        try {
+            const res = await fetch('/settings/temp_threshold/reset', { method:'POST' });
+            const data = await res.json();
+            if (data.status === 'ok') {
+                showSettingsMsg('reset');
+            }
+        } catch(e) {}
+    }
+
+    function showSettingsMsg(type) {
+        // Xóa thông báo cũ nếu có
+        const old = document.getElementById('settings-msg-box');
+        if (old) old.remove();
+
+        const isReset = type === 'reset';
+        const div = document.createElement('div');
+        div.id = 'settings-msg-box';
+        div.style.cssText = `
+            display:flex; align-items:center; gap:10px;
+            padding:12px 18px; border-radius:14px; margin-bottom:12px;
+            font-weight:700; font-size:14px;
+            background:${isReset ? '#fffbeb' : '#d1fae5'};
+            border:1.5px solid ${isReset ? '#fde68a' : '#6ee7b7'};
+            color:${isReset ? '#92400e' : '#065f46'};
+            animation: fadeInDown .3s ease;
+        `;
+        div.innerHTML = `
+            <i class="fas ${isReset ? 'fa-undo text-amber-500' : 'fa-check-circle text-emerald-500'}"></i>
+            <span>${isReset ? 'Đã reset về mặc định thành công!' : 'Lưu cài đặt thành công!'}</span>
+        `;
+
+        // Chèn trước nút hành động
+        const btnRow = document.querySelector('#page-settings .flex.gap-3.pb-4');
+        btnRow.parentNode.insertBefore(div, btnRow);
+
+        // Tự ẩn sau 3 giây
+        setTimeout(() => { div.remove(); }, 3000);
     }
 
     // ── STREAM ────────────────────────────────────────────
@@ -1595,20 +1658,17 @@
         }
     }
 
+    
     // ── POLL NHIỆT ĐỘ mỗi 3 giây ─────────────────────────
     setInterval(async () => {
         try {
             const res  = await fetch('/temperature');
             const data = await res.json();
             updateTempUI(data.temp, data.level);
+            updateSettingsTemp(data.temp); // ← thêm dòng này
         } catch(e) {}
     }, 3000);
-    // Sync status bar theo trạng thái thực
-    if (data.running) {
-        updateFanStatusBar('on');
-    } else {
-        updateFanStatusBar('off');
-    }
+    
 
     // ── MODE ──────────────────────────────────────────────
     function setMode(mode) {
@@ -1702,27 +1762,95 @@
         } catch(e) {}
     }
 
+    // ── ANIMATE RPM COUNT-UP ─────────────────────────────
+    const rpmAnimState = {};
+
+    function animateRPM(elementId, targetVal, duration = 1200) {
+        const el = document.getElementById(elementId);
+        if (!el) return;
+
+        // Hủy animation cũ nếu đang chạy
+        if (rpmAnimState[elementId]) {
+            cancelAnimationFrame(rpmAnimState[elementId]);
+        }
+
+        const startVal  = parseFloat(el.dataset.currentVal || 0);
+        const startTime = performance.now();
+        const diff      = targetVal - startVal;
+
+        // Nếu giá trị không đổi → không animate
+        if (Math.abs(diff) < 0.5) return;
+
+        function step(now) {
+            const elapsed  = now - startTime;
+            const progress = Math.min(elapsed / duration, 1);
+
+            // Easing: ease-out (giảm dần về cuối)
+            const eased = 1 - Math.pow(1 - progress, 3);
+            const cur   = startVal + diff * eased;
+
+            const rounded = Math.round(cur);
+
+            // Cập nhật text theo từng element
+            if (elementId === 'smart-rpm-disp') {
+                el.innerText = targetVal === 0 ? '—' : rounded;
+            } else if (elementId === 'panel-speed' || elementId === 'panel-speed-eco') {
+                el.innerText = targetVal === 0 ? '—' : rounded + ' RPM';
+            } else {
+                el.innerText = rounded;
+            }
+
+            if (progress < 1) {
+                rpmAnimState[elementId] = requestAnimationFrame(step);
+            } else {
+                // Đảm bảo giá trị cuối chính xác
+                if (elementId === 'smart-rpm-disp') {
+                    el.innerText = targetVal === 0 ? '—' : Math.round(targetVal);
+                } else if (elementId === 'panel-speed' || elementId === 'panel-speed-eco') {
+                    el.innerText = targetVal === 0 ? '—' : Math.round(targetVal) + ' RPM';
+                } else {
+                    el.innerText = Math.round(targetVal);
+                }
+                el.dataset.currentVal = targetVal;
+                delete rpmAnimState[elementId];
+            }
+
+            el.dataset.currentVal = cur;
+        }
+
+        rpmAnimState[elementId] = requestAnimationFrame(step);
+    }
+
     function updateFanUI(rpm, hz, running) {
-        rpm = Math.round(rpm);
-        const txt = running && rpm > 0 ? rpm + ' RPM' : '—';
+        rpm = parseFloat(rpm) || 0;
+        const targetRPM = running && rpm > 0 ? rpm : 0;
 
-        document.getElementById('disp-hw').innerText = 'Biến tần: ' + parseFloat(hz).toFixed(1) + ' Hz';
+        // Animate tất cả các ô RPM
+        animateRPM('panel-speed',     targetRPM);
+        animateRPM('panel-speed-eco', targetRPM);
+        animateRPM('smart-rpm-disp',  targetRPM);
 
-        // Cập nhật mini-cards
-        const ps  = document.getElementById('panel-speed');     if(ps)  ps.innerText  = txt;
-        const pse = document.getElementById('panel-speed-eco'); if(pse) pse.innerText = txt;
+        // Hz cập nhật ngay (không cần animate)
+        const hzVal = parseFloat(hz).toFixed(1);
+        document.getElementById('disp-hw').innerText = 'Biến tần: ' + hzVal + ' Hz';
 
-        const badge  = document.getElementById('fan-state-badge');
-        const pIcon  = document.getElementById('panel-fan-icon');
+        const smartHz = document.getElementById('smart-hz-disp');
+        if (smartHz) {
+            smartHz.innerText = running && rpm > 0 ? '/ ' + hzVal + ' Hz' : '';
+        }
+
+        // Badge & icon quạt
+        const badge = document.getElementById('fan-state-badge');
+        const pIcon = document.getElementById('panel-fan-icon');
 
         if (running && rpm > 0) {
             badge.className = 'fan-state on';
             badge.innerHTML = '<i class="fas fa-circle" style="font-size:7px"></i> Đang chạy';
-            if(pIcon) pIcon.classList.add('fan-spin');
+            if (pIcon) pIcon.classList.add('fan-spin');
         } else {
             badge.className = 'fan-state off';
             badge.innerHTML = '<i class="fas fa-circle" style="font-size:7px"></i> Dừng';
-            if(pIcon) pIcon.classList.remove('fan-spin');
+            if (pIcon) pIcon.classList.remove('fan-spin');
         }
     }
 
@@ -2215,22 +2343,24 @@
     }
     function startSmart() {
         updateFanStatusBar('turning_on');
-        const msg = document.getElementById('smart-start-msg');
-        msg.style.display = 'flex';
-        setTimeout(() => { msg.style.display = 'none'; }, 1000);
+        const msgStart  = document.getElementById('smart-start-msg');
+        const msgCancel = document.getElementById('smart-cancel-msg');
+        msgCancel.style.display = 'none';   // ẩn thông báo hủy
+        msgStart.style.display  = 'flex';   // hiện thông báo bắt đầu — giữ nguyên
         fetch('/smart/start', { method:'POST' })
             .then(() => { updateFanStatusBar('on'); })
-            .catch(e=>{});
+            .catch(e => {});
     }
 
     function cancelSmart() {
         updateFanStatusBar('turning_off');
-        const msg = document.getElementById('smart-cancel-msg');
-        msg.style.display = 'flex';
-        setTimeout(() => { msg.style.display = 'none'; }, 1000);
+        const msgStart  = document.getElementById('smart-start-msg');
+        const msgCancel = document.getElementById('smart-cancel-msg');
+        msgStart.style.display  = 'none';   // ẩn thông báo bắt đầu
+        msgCancel.style.display = 'flex';   // hiện thông báo hủy — giữ nguyên
         fetch('/smart/stop', { method:'POST' })
             .then(() => { updateFanStatusBar('off'); })
-            .catch(e=>{});
+            .catch(e => {});
     }
 
     // ── TRACKING SLIDER DRAG ─────────────────────────────
