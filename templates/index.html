@@ -640,6 +640,18 @@
                                 <i class="fas fa-robot"></i>
                             </div>
                         </div>
+                        <div class="report-card">
+                            <div>
+                                <p class="text-xs font-bold text-slate-500 mb-1">NHIỆT ĐỘ CPU</p>
+                                <p class="text-2xl font-black text-slate-800" id="rpt-cpu">
+                                    — <span class="text-sm font-medium text-slate-400">°C</span>
+                                </p>
+                                <span id="rpt-cpu-badge" class="inline-block mt-1 px-2 py-0.5 text-xs font-bold rounded-full"></span>
+                            </div>
+                            <div class="w-11 h-11 rounded-xl bg-orange-50 text-orange-500 flex items-center justify-center text-lg">
+                                <i class="fas fa-microchip"></i>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Biểu đồ nhiệt độ + RPM -->
@@ -1615,6 +1627,32 @@
         },2000);
     }
     function stopPolling(){clearInterval(pollInterval);pollInterval=null;}
+    
+    function updateCpuBadge(temp) {
+        const badge = document.getElementById('rpt-cpu-badge');
+        if (temp < 60) {
+            badge.className = 'inline-block mt-1 px-2 py-0.5 text-xs font-bold rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100';
+            badge.textContent = 'Bình thường';
+        } else if (temp < 75) {
+            badge.className = 'inline-block mt-1 px-2 py-0.5 text-xs font-bold rounded-full bg-amber-50 text-amber-700 border border-amber-100';
+            badge.textContent = 'Ấm';
+        } else {
+            badge.className = 'inline-block mt-1 px-2 py-0.5 text-xs font-bold rounded-full bg-red-50 text-red-700 border border-red-100';
+            badge.textContent = 'Quá nhiệt';
+        }
+    }
+
+    setInterval(async () => {
+        try {
+            const res = await fetch('/cpu_temp');
+            const data = await res.json();
+            if (data.temp !== null) {
+                document.getElementById('rpt-cpu').innerHTML =
+                    data.temp.toFixed(1) + ' <span class="text-sm font-medium text-slate-400">°C</span>';
+                updateCpuBadge(data.temp);
+            }
+        } catch(e) {}
+    }, 5000);
 
     // ── MÀU THEO MỨC NHIỆT ────────────────────────────────
     const TEMP_COLOR = {

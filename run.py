@@ -7,6 +7,7 @@ import concurrent.futures
 import numpy as np
 import os
 from datetime import datetime
+import subprocess
 
 # ====================================================================
 # HAILO-8L — import có bảo vệ
@@ -422,6 +423,8 @@ def video_feed():
         return redirect(url_for('login'))
     return Response(generate_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
+
+
 # ====================================================================
 # ROUTES — CAMERA & PTZ
 # ====================================================================
@@ -559,6 +562,21 @@ def temperature():
         elif temp < 35: level = 'Trung bình'
         else:           level = 'Cao'
     return jsonify({'temp': temp, 'level': level})
+
+# ====================================================================
+# ROUTE — NHIỆT ĐỘ CPU (Raspberry Pi)
+# ====================================================================
+@app.route('/cpu_temp')
+def cpu_temp():
+    if not session.get('logged_in'):
+        return jsonify({'status': 'error'}), 401
+    try:
+        with open('/sys/class/thermal/thermal_zone0/temp') as f:
+            temp = round(int(f.read().strip()) / 1000.0, 1)
+        return jsonify({'temp': temp, 'status': 'ok'})
+    except Exception as e:
+        print(f"[CPU_TEMP] Lỗi: {e}")
+        return jsonify({'temp': None, 'status': 'error'})
 
 # ====================================================================
 # ROUTE — ECO
