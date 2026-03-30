@@ -39,6 +39,8 @@ except ImportError:
 ptz_executor = concurrent.futures.ThreadPoolExecutor(max_workers=2)
 app = Flask(__name__)
 app.secret_key = 'smartfan_datn_secret_key'
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+app.config['SESSION_COOKIE_SECURE'] = False
 
 # ── PHÂN QUYỀN 2 TÀI KHOẢN ──────────────────────────────────────────
 USERS = {
