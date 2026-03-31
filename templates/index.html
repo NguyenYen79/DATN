@@ -42,6 +42,14 @@
         @keyframes livepulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
         .live-dot { animation: livepulse 1.5s ease-in-out infinite; }
 
+        /* ── Desktop: giữ nguyên overflow layout ── */
+        @media (min-width: 768px) {
+            body  { height: 100vh; overflow: hidden; }
+            main  { height: 100vh; overflow: hidden; }
+            .flex-1.overflow-hidden.p-3 { overflow: hidden; height: 100%; }
+            #page-home, #page-settings, #page-report, #page-history { height: 100%; overflow-y: auto; }
+        }
+
         /* DARK MODE */
         body.dark { background: #0f172a !important; color: #e2e8f0; }
         body.dark #sidebar { background: #1e293b !important; border-color: #334155 !important; }
@@ -144,6 +152,50 @@
 
             /* ── Ẩn sidebar desktop, hiện bottom nav ── */
             #sidebar { display: none !important; }
+
+            /* ── FIX SCROLL MOBILE ── */
+            html, body {
+                height: auto !important;
+                min-height: 100vh !important;
+                overflow-x: hidden !important;
+                overflow-y: auto !important;
+            }
+
+            main {
+                height: auto !important;
+                min-height: 100vh !important;
+                overflow: visible !important;
+                flex: 1;
+            }
+
+            /* Content wrapper */
+            .flex-1.overflow-hidden.p-3 {
+                overflow: visible !important;
+                height: auto !important;
+                flex: none !important;
+            }
+
+            /* Tất cả các trang con đều scroll được */
+            #page-home,
+            #page-settings,
+            #page-report,
+            #page-history {
+                height: auto !important;
+                min-height: 0 !important;
+                overflow: visible !important;
+            }
+
+            /* Trang chính camera */
+            #page-main {
+                height: auto !important;
+                overflow: visible !important;
+            }
+
+            /* Panel điều khiển bên phải */
+            #page-main > .bg-white.rounded-2xl:last-child {
+                overflow-y: visible !important;
+                height: auto !important;
+            }
 
             /* ── Bottom Navigation Bar ── */
             #mobile-bottom-nav {
@@ -337,7 +389,7 @@
         }
    </style>
 </head>
-<body class="bg-slate-50 text-slate-800 font-sans h-screen flex overflow-hidden">
+<body class="bg-slate-50 text-slate-800 font-sans flex flex-col">
 
     <!-- SIDEBAR (desktop only — hidden on mobile via CSS) -->
     <aside id="sidebar" class="w-64 bg-white border-r border-slate-200 flex flex-col shadow-sm z-10 flex-shrink-0">
@@ -403,8 +455,7 @@
     </nav>
 
     <!-- MAIN -->
-    <main class="flex-1 flex flex-col h-screen overflow-hidden min-w-0">
-
+    <main class="flex-1 flex flex-col min-w-0">
         <!-- HEADER -->
         <header class="bg-white border-b border-slate-200 shadow-sm px-4 md:px-6 py-3 flex flex-wrap items-center justify-between gap-3 flex-shrink-0">
             <div class="flex items-center bg-slate-100 p-1 rounded-2xl border border-slate-200">
@@ -439,7 +490,7 @@
         </header>
 
         <!-- CONTENT -->
-        <div class="flex-1 overflow-hidden p-3 md:p-4 bg-slate-50/50">
+        <div class="flex-1 p-3 md:p-4 bg-slate-50/50">
 
             <!-- ══ TRANG THÔNG TIN DỰ ÁN ══ -->
             <div id="page-home" class="h-full overflow-y-auto">
@@ -1523,6 +1574,7 @@
 
     // ── ĐIỀU HƯỚNG TRANG ─────────────────────────────────
     function openHome() {
+        window.scrollTo(0, 0);
         document.querySelector('header').style.display = '';
         document.getElementById('page-history').style.display = 'none';
         document.getElementById('page-report').style.display = 'none';
@@ -1537,6 +1589,7 @@
     }
 
     function openMain() {
+        window.scrollTo(0, 0);
         document.querySelector('header').style.display = '';
         resetSidebar();
         document.getElementById('page-history').style.display = 'none';
@@ -1552,6 +1605,7 @@
     }
 
     function openSettings() {
+        window.scrollTo(0, 0);
         document.querySelector('header').style.display = 'none';
         document.getElementById('page-history').style.display = 'none';
         document.getElementById('page-report').style.display = 'none';
@@ -2070,6 +2124,7 @@
     };
 
     function openReport() {
+        window.scrollTo(0, 0);
         document.querySelector('header').style.display = 'none';
         document.getElementById('page-history').style.display = 'none';
         document.getElementById('page-home').style.display     = 'none';
@@ -2192,6 +2247,7 @@
     let currentPeriod = '1m';
 
     function openHistory() {
+        window.scrollTo(0, 0);
         document.querySelector('header').style.display = 'none';
         document.getElementById('page-home').style.display     = 'none';
         document.getElementById('page-main').style.display     = 'none';
