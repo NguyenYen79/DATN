@@ -47,12 +47,12 @@ USERS = {
 # ====================================================================
 # CẤU HÌNH CAMERA EZVIZ
 # ====================================================================
-RTSP_URL     = "rtsp://admin:BLMYQK@192.168.50.194:554/h264/ch1/main/av_stream"
-ACCESS_TOKEN = "at.djmvrykn6vx89dl3c3b74g53b3jg4imx-7ehcljoo5u-118ingl-i2lkdn3ou"
-DEVICE_SN    = "J83082531"
-CHANNEL      = 1
-BASE_URL     = "https://isgpopen.ezvizlife.com"
-DIR_MAP      = {"UP": 0, "DOWN": 1, "LEFT": 2, "RIGHT": 3}
+# --- THÔNG TIN CAMERA ---
+CAM_IP = '192.168.50.112'  # Nhớ thay bằng IP thật
+CAM_USER = 'raspberrypi'
+CAM_PASS = 'Admin@123'
+
+RTSP_URL = f'rtsp://{CAM_USER}:{CAM_PASS}@{CAM_IP}:554/stream2'
 
 # ====================================================================
 # CẤU HÌNH BIẾN TẦN

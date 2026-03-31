@@ -11,9 +11,6 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <style>
-        /* ═══════════════════════════════════════════════════
-           DESKTOP STYLES (giữ nguyên hoàn toàn)
-        ═══════════════════════════════════════════════════ */
         .repeat-day-btn { cursor:pointer; }
         .repeat-day-btn span { display:inline-block; padding:4px 8px; border-radius:8px; font-size:12px; font-weight:700; background:#f1f5f9; color:#64748b; border:1.5px solid #e2e8f0; transition:all .15s; }
         .repeat-day-btn input:checked + span { background:#d1fae5; color:#065f46; border-color:#10b981; }
@@ -41,14 +38,6 @@
         }
         @keyframes livepulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
         .live-dot { animation: livepulse 1.5s ease-in-out infinite; }
-
-        /* ── Desktop: giữ nguyên overflow layout ── */
-        @media (min-width: 768px) {
-            body  { height: 100vh; overflow: hidden; }
-            main  { height: 100vh; overflow: hidden; }
-            .flex-1.overflow-hidden.p-3 { overflow: hidden; height: 100%; }
-            #page-home, #page-settings, #page-report, #page-history { height: 100%; overflow-y: auto; }
-        }
 
         /* DARK MODE */
         body.dark { background: #0f172a !important; color: #e2e8f0; }
@@ -143,255 +132,11 @@
         .timer-badge.waiting  { background:#f1f5f9; color:#94a3b8; }
         .timer-badge.running  { background:#d1fae5; color:#065f46; }
         .timer-badge.finished { background:#fee2e2; color:#991b1b; }
-
-        /* ═══════════════════════════════════════════════════
-           MOBILE ONLY STYLES — chỉ áp dụng ≤ 767px
-           Desktop (≥768px) KHÔNG bị ảnh hưởng gì cả
-        ═══════════════════════════════════════════════════ */
-        @media (max-width: 767px) {
-
-            /* ── Ẩn sidebar desktop, hiện bottom nav ── */
-            #sidebar { display: none !important; }
-
-            /* ── FIX SCROLL MOBILE ── */
-            html, body {
-                height: auto !important;
-                min-height: 100vh !important;
-                overflow-x: hidden !important;
-                overflow-y: auto !important;
-            }
-
-            main {
-                height: auto !important;
-                min-height: 100vh !important;
-                overflow: visible !important;
-                flex: 1;
-            }
-
-            /* Content wrapper */
-            .flex-1.overflow-hidden.p-3 {
-                overflow: visible !important;
-                height: auto !important;
-                flex: none !important;
-            }
-
-            /* Tất cả các trang con đều scroll được */
-            #page-home,
-            #page-settings,
-            #page-report,
-            #page-history {
-                height: auto !important;
-                min-height: 0 !important;
-                overflow: visible !important;
-            }
-
-            /* Trang chính camera */
-            #page-main {
-                height: auto !important;
-                overflow: visible !important;
-            }
-
-            /* Panel điều khiển bên phải */
-            #page-main > .bg-white.rounded-2xl:last-child {
-                overflow-y: visible !important;
-                height: auto !important;
-            }
-
-            /* ── Bottom Navigation Bar ── */
-            #mobile-bottom-nav {
-                display: flex !important;
-            }
-
-            /* ── Layout tổng thể ── */
-            body {
-                flex-direction: column;
-                overflow: auto;
-            }
-
-            main {
-                height: auto !important;
-                overflow: visible !important;
-                padding-bottom: 72px; /* chừa chỗ cho bottom nav */
-            }
-
-            /* ── Header mobile ── */
-            header {
-                padding: 8px 12px !important;
-                flex-wrap: nowrap !important;
-                gap: 8px !important;
-                overflow-x: auto;
-            }
-
-            /* Mode switcher nhỏ lại */
-            .mode-btn {
-                padding: 8px 14px !important;
-                font-size: 13px !important;
-            }
-            .mode-btn span { display: none; } /* ẩn text, chỉ giữ icon */
-            .mode-btn i { margin: 0 !important; font-size: 16px !important; }
-
-            /* Ẩn bớt thông tin header */
-            header .hidden { display: none !important; }
-            #header-date { display: none !important; }
-
-            /* ── Content area ── */
-            .flex-1.overflow-hidden.p-3 {
-                overflow: visible !important;
-                height: auto !important;
-            }
-
-            /* ── Trang chính: camera + panel xếp dọc ── */
-            #page-main {
-                display: flex !important;
-                flex-direction: column !important;
-                height: auto !important;
-                gap: 12px;
-            }
-
-            /* Camera block */
-            #page-main > .lg\:col-span-2 {
-                min-height: 0 !important;
-            }
-
-            /* Camera video container: chiều cao cố định trên mobile */
-            #page-main > .lg\:col-span-2 .relative.flex-1 {
-                height: 220px !important;
-                flex: none !important;
-                min-height: 0 !important;
-            }
-
-            /* PTZ section gọn hơn trên mobile */
-            #page-main > .lg\:col-span-2 > div:last-child {
-                padding: 12px 16px !important;
-            }
-
-            /* Control panel */
-            #page-main > .bg-white.rounded-2xl:last-child {
-                overflow-y: visible !important;
-                min-height: 0 !important;
-            }
-
-            /* ── Event table: scroll ngang ── */
-            #history-table-body,
-            .event-row {
-                min-width: 600px;
-            }
-            #page-history .bg-white.rounded-2xl:last-child > div:last-child {
-                overflow-x: auto;
-            }
-
-            /* ── Grid 2 cột stat cards → 2 cột nhỏ hơn ── */
-            .grid.grid-cols-2 {
-                grid-template-columns: 1fr 1fr !important;
-                gap: 8px !important;
-            }
-            .report-card, .history-card {
-                padding: 12px 14px !important;
-            }
-            .report-card p.text-2xl,
-            .history-card p.text-2xl {
-                font-size: 1.2rem !important;
-            }
-
-            /* ── Filter buttons wrap gọn ── */
-            .flex.gap-2.flex-wrap {
-                gap: 6px !important;
-            }
-            .filter-btn, .period-btn {
-                padding: 6px 12px !important;
-                font-size: 12px !important;
-            }
-
-            /* ── Threshold cards ── */
-            .threshold-card {
-                padding: 14px !important;
-            }
-
-            /* ── Smart panel ── */
-            #panel-Smart .w-20 {
-                width: 64px !important;
-                height: 64px !important;
-            }
-            #panel-Smart .fas.fa-robot {
-                font-size: 2rem !important;
-            }
-
-            /* ── Pages scroll tốt ── */
-            #page-home,
-            #page-settings,
-            #page-report,
-            #page-history {
-                height: auto !important;
-                overflow-y: visible !important;
-            }
-
-            /* ── Dark mode bottom nav ── */
-            body.dark #mobile-bottom-nav {
-                background: #1e293b !important;
-                border-color: #334155 !important;
-            }
-            body.dark .mob-nav-btn {
-                color: #64748b !important;
-            }
-            body.dark .mob-nav-btn.active {
-                color: #10b981 !important;
-            }
-            body.dark .mob-nav-btn span {
-                color: inherit !important;
-            }
-
-            /* ── Viewer badge nhỏ hơn ── */
-            #viewer-badge-mobile {
-                display: inline-block !important;
-            }
-        }
-
-        /* ── Bottom Nav: ẩn mặc định, chỉ hiện trên mobile ── */
-        #mobile-bottom-nav {
-            display: none;
-            position: fixed;
-            bottom: 0; left: 0; right: 0;
-            z-index: 100;
-            background: #ffffff;
-            border-top: 1px solid #e2e8f0;
-            padding: 6px 0 8px;
-            box-shadow: 0 -4px 20px rgba(0,0,0,0.08);
-        }
-
-        .mob-nav-btn {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            gap: 3px;
-            padding: 4px 0;
-            color: #94a3b8;
-            background: none;
-            border: none;
-            cursor: pointer;
-            transition: color 0.15s;
-            font-family: inherit;
-        }
-        .mob-nav-btn i { font-size: 18px; }
-        .mob-nav-btn span { font-size: 10px; font-weight: 700; }
-        .mob-nav-btn.active { color: #10b981; }
-        .mob-nav-btn.active i { transform: translateY(-1px); }
-
-        /* Chấm indicator active */
-        .mob-nav-btn.active::after {
-            content: '';
-            display: block;
-            width: 4px; height: 4px;
-            border-radius: 50%;
-            background: #10b981;
-            margin: 0 auto;
-        }
    </style>
 </head>
-<body class="bg-slate-50 text-slate-800 font-sans flex flex-col">
+<body class="bg-slate-50 text-slate-800 font-sans h-screen flex overflow-hidden">
 
-    <!-- SIDEBAR (desktop only — hidden on mobile via CSS) -->
+    <!-- SIDEBAR -->
     <aside id="sidebar" class="w-64 bg-white border-r border-slate-200 flex flex-col shadow-sm z-10 flex-shrink-0">
         <div class="h-20 flex items-center px-6 border-b border-slate-100">
             <div class="flex items-center gap-3 text-emerald-600">
@@ -430,32 +175,9 @@
         </div>
     </aside>
 
-    <!-- ══ MOBILE BOTTOM NAVIGATION (chỉ hiện trên mobile) ══ -->
-    <nav id="mobile-bottom-nav">
-        <button class="mob-nav-btn active" id="mobnav-main" onclick="mobileNav('main')">
-            <i class="fas fa-tv"></i>
-            <span>Điều khiển</span>
-        </button>
-        <button class="mob-nav-btn" id="mobnav-home" onclick="mobileNav('home')">
-            <i class="fas fa-home"></i>
-            <span>Dự án</span>
-        </button>
-        <button class="mob-nav-btn" id="mobnav-settings" onclick="mobileNav('settings')">
-            <i class="fas fa-cog"></i>
-            <span>Cài đặt</span>
-        </button>
-        <button class="mob-nav-btn" id="mobnav-report" onclick="mobileNav('report')">
-            <i class="fas fa-chart-pie"></i>
-            <span>Báo cáo</span>
-        </button>
-        <button class="mob-nav-btn" id="mobnav-history" onclick="mobileNav('history')">
-            <i class="fas fa-history"></i>
-            <span>Lịch sử</span>
-        </button>
-    </nav>
-
     <!-- MAIN -->
-    <main class="flex-1 flex flex-col min-w-0">
+    <main class="flex-1 flex flex-col h-screen overflow-hidden min-w-0">
+
         <!-- HEADER -->
         <header class="bg-white border-b border-slate-200 shadow-sm px-4 md:px-6 py-3 flex flex-wrap items-center justify-between gap-3 flex-shrink-0">
             <div class="flex items-center bg-slate-100 p-1 rounded-2xl border border-slate-200">
@@ -482,39 +204,44 @@
                     <i class="far fa-calendar-alt"></i>
                     <span id="header-date">--/--/----</span>
                 </div>
-                <!-- Mobile: theme toggle nhỏ gọn -->
-                <button onclick="toggleTheme()" class="md:hidden w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 hover:text-emerald-600 transition">
-                    <i id="theme-icon-mobile" class="fas fa-moon text-sm"></i>
-                </button>
             </div>
         </header>
 
         <!-- CONTENT -->
-        <div class="flex-1 p-3 md:p-4 bg-slate-50/50">
+        <div class="flex-1 overflow-hidden p-3 md:p-4 bg-slate-50/50">
 
             <!-- ══ TRANG THÔNG TIN DỰ ÁN ══ -->
             <div id="page-home" class="h-full overflow-y-auto">
                 <div class="max-w-4xl mx-auto py-2 space-y-5">
 
-                    <!-- Nút quay lại (desktop only) -->
-                    <div class="hidden md:block">
+                    <!-- Nút quay lại -->
+                    <div>
                         <button onclick="openMain()" class="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 hover:text-emerald-600 hover:border-emerald-300 rounded-xl font-semibold text-sm shadow-sm transition-all active:scale-95">
                             <i class="fas fa-arrow-left text-xs"></i> Quay lại hệ thống
                         </button>
                     </div>
 
+                    
+
                     <!-- Thông tin trường -->
                     <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
                     <div class="flex items-center gap-4">
+                        <!-- Logo trường -->
                         <img src="/static/logotruong.png" alt="Logo Trường" class="w-16 h-16 object-contain flex-shrink-0">
+
+                        <!-- Tên trường/khoa/bộ môn căn giữa -->
                         <div class="flex-1 text-center">
+                            
                             <p class="font-black text-slate-800 text-base leading-snug">Trường Đại học Công Nghệ Kỹ Thuật TP.HCM</p>
                             <p class="text-slate-500 text-sm font-semibold mt-1">Khoa Cơ Khí Chế Tạo Máy</p>
                             <p class="text-slate-500 text-sm font-semibold mt-0.5">Bộ Môn Cơ Điện Tử</p>
                         </div>
+
+                        <!-- Logo khoa -->
                         <img src="/static/FMEE.jpg" alt="Logo Khoa" class="w-16 h-16 object-contain flex-shrink-0">
                     </div>
-                    <div class="rounded-2xl overflow-hidden shadow-sm border border-slate-100 mt-4"
+                    <!-- Hero banner -->
+                    <div class="rounded-2xl overflow-hidden shadow-sm border border-slate-100"
                          style="background: linear-gradient(135deg,#170e96 50%, #4c0edd 100%);">
                         <div class="p-6 md:p-8 flex flex-col md:flex-row items-center gap-6">
                             <div class="flex-shrink-0 p-2 bg-white rounded-3xl shadow-lg" style="box-shadow: 0 8px 32px rgba(0,0,0,0.18);">
@@ -523,6 +250,7 @@
                             <div class="text-center md:text-left">
                                 <div class="text-emerald-300 text-xs font-bold uppercase tracking-widest mb-1">ĐỒ ÁN TỐT NGHIỆP</div>
                                 <h2 class="text-white text-2xl md:text-3xl font-black leading-tight mb-2">Ứng Dụng Xử Lý Ảnh Trong Điều Khiển Tốc Độ Quạt Định Hướng Tiết Kiệm Năng Lượng</h2>
+                                
                             </div>
                         </div>
                     </div>
@@ -616,7 +344,7 @@
                         </h4>
                         <div class="flex flex-wrap items-center gap-2 justify-center">
                             <div class="flex flex-col items-center gap-1 px-4 py-3 bg-slate-800 rounded-xl text-white text-xs font-bold text-center">
-                                <i class="fas fa-camera text-emerald-400 text-lg"></i>Camera IP
+                                <i class="fas fa-camera text-emerald-400 text-lg"></i>Camera IP 
                             </div>
                             <i class="fas fa-arrow-right text-slate-300 text-sm"></i>
                             <div class="flex flex-col items-center gap-1 px-4 py-3 bg-purple-600 rounded-xl text-white text-xs font-bold text-center">
@@ -750,8 +478,8 @@
             <div id="page-history" class="h-full overflow-y-auto">
                 <div class="max-w-4xl mx-auto py-2 space-y-4">
 
-                    <!-- Nút quay lại (desktop only) -->
-                    <div class="hidden md:block">
+                    <!-- Nút quay lại -->
+                    <div>
                         <button onclick="openMain()" class="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 hover:text-emerald-600 hover:border-emerald-300 rounded-xl font-semibold text-sm shadow-sm transition-all active:scale-95">
                             <i class="fas fa-arrow-left text-xs"></i> Quay lại hệ thống
                         </button>
@@ -827,20 +555,19 @@
                             <span id="his-count" class="text-xs font-bold text-slate-400">— sự kiện</span>
                         </div>
 
-                        <!-- Scroll wrapper on mobile -->
-                        <div style="overflow-x: auto; -webkit-overflow-scrolling: touch;">
-                            <!-- Header bảng -->
-                            <div class="event-row bg-slate-50 font-black text-xs text-slate-500 uppercase mb-1" style="border-radius:10px;">
-                                <span>Thời gian</span>
-                                <span>Chế độ</span>
-                                <span>Nhiệt độ</span>
-                                <span>RPM</span>
-                                <span>Số người</span>
-                                <span>Sự kiện</span>
-                            </div>
-                            <!-- Các dòng sự kiện -->
-                            <div id="history-table-body"></div>
+                        <!-- Header bảng -->
+                        <div class="event-row bg-slate-50 font-black text-xs text-slate-500 uppercase mb-1" style="border-radius:10px;">
+                            <span>Thời gian</span>
+                            <span>Chế độ</span>
+                            <span>Nhiệt độ</span>
+                            <span>RPM</span>
+                            <span>Số người</span>
+                            <span>Sự kiện</span>
                         </div>
+
+                        <!-- Các dòng sự kiện -->
+                        <div id="history-table-body"></div>
+
                     </div>
 
                 </div>
@@ -850,8 +577,8 @@
             <div id="page-report" class="h-full overflow-y-auto">
                 <div class="max-w-4xl mx-auto py-2 space-y-4">
 
-                    <!-- Nút quay lại (desktop only) -->
-                    <div class="hidden md:block">
+                    <!-- Nút quay lại -->
+                    <div>
                         <button onclick="openMain()" class="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 hover:text-emerald-600 hover:border-emerald-300 rounded-xl font-semibold text-sm shadow-sm transition-all active:scale-95">
                             <i class="fas fa-arrow-left text-xs"></i> Quay lại hệ thống
                         </button>
@@ -948,8 +675,8 @@
             <div id="page-settings" class="h-full overflow-y-auto">
                 <div class="max-w-4xl mx-auto py-2 space-y-4">
 
-                    <!-- Nút quay lại (desktop only) -->
-                    <div class="hidden md:block">
+                    <!-- Nút quay lại -->
+                    <div>
                         <button onclick="openMain()" class="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 hover:text-emerald-600 hover:border-emerald-300 rounded-xl font-semibold text-sm shadow-sm transition-all active:scale-95">
                             <i class="fas fa-arrow-left text-xs"></i> Quay lại hệ thống
                         </button>
@@ -1211,6 +938,7 @@
                                 <i class="fas fa-ban mr-2"></i> TẮT QUẠT
                             </button>
                         </div>
+                        <!-- Thêm dòng này ngay sau -->
                         <div id="fan-status-bar-smart" class="flex items-center justify-center gap-2 mb-3 font-bold"
                             style="color:#991b1b; font-size:1.1rem;">
                             <i class="fas fa-circle" style="font-size:9px"></i>
@@ -1280,18 +1008,23 @@
                                 <!-- Dropdown -->
                                 <div id="repeat-menu" class="hidden absolute right-0 top-10 w-56 bg-white rounded-2xl shadow-xl border border-slate-100 p-3 z-50">
                                     <p class="text-xs font-black text-slate-500 uppercase tracking-wide mb-2 px-1">Chế độ lặp lại</p>
+
                                     <label class="flex items-center gap-2 px-2 py-2 rounded-xl hover:bg-slate-50 cursor-pointer">
                                         <input type="radio" name="repeat-mode" value="once" class="accent-emerald-500" onchange="setRepeatMode('once')" checked>
                                         <span class="text-sm font-semibold text-slate-700">1 lần</span>
                                     </label>
+
                                     <label class="flex items-center gap-2 px-2 py-2 rounded-xl hover:bg-slate-50 cursor-pointer">
                                         <input type="radio" name="repeat-mode" value="daily" class="accent-emerald-500" onchange="setRepeatMode('daily')">
                                         <span class="text-sm font-semibold text-slate-700">Hằng ngày</span>
                                     </label>
+
                                     <label class="flex items-center gap-2 px-2 py-2 rounded-xl hover:bg-slate-50 cursor-pointer">
                                         <input type="radio" name="repeat-mode" value="custom" class="accent-emerald-500" onchange="setRepeatMode('custom')">
                                         <span class="text-sm font-semibold text-slate-700">Tùy chọn ngày</span>
                                     </label>
+
+                                    <!-- Checkbox các ngày -->
                                     <div id="repeat-days" class="hidden mt-2 px-1">
                                         <div class="flex flex-wrap gap-1.5">
                                             <label class="repeat-day-btn"><input type="checkbox" value="mon" class="hidden"><span>T2</span></label>
@@ -1303,7 +1036,10 @@
                                             <label class="repeat-day-btn"><input type="checkbox" value="sun" class="hidden"><span>CN</span></label>
                                         </div>
                                     </div>
+
+                                    <!-- Badge hiện chế độ đang chọn -->
                                     <div class="mt-2 pt-2 border-t border-slate-100">
+                                        <!-- Chọn mức quạt -->
                                         <div class="mt-2 pt-2 border-t border-slate-100">
                                             <p class="text-xs font-black text-slate-500 uppercase tracking-wide mb-2 px-1">Mức quạt ECO</p>
                                             <div class="flex flex-col gap-1">
@@ -1353,15 +1089,20 @@
                             </div>
                         </div>
 
+                        <!-- Thông báo đã lưu -->
                         <div id="eco-save-msg" class="items-center justify-center gap-2 px-4 py-2 bg-emerald-50 border border-emerald-200 rounded-xl mb-2 transition-all" style="display:none;">
                             <i class="fas fa-check-circle text-emerald-500"></i>
                             <span class="text-emerald-700 text-sm font-bold">Thành Công!</span>
                         </div>
+                        <!-- Thêm thông báo hủy -->
                         <div id="eco-cancel-msg" class="items-center justify-center gap-2 px-4 py-2 bg-red-50 border border-red-200 rounded-xl mb-2" style="display:none;">
                             <i class="fas fa-times-circle text-red-500"></i>
                             <span class="text-red-700 text-sm font-bold">Đã hủy lịch trình!</span>
                         </div>
 
+                        <!-- NÚT LƯU LỊCH TRÌNH — chỉ cho giờ bật/tắt -->
+
+                       
                         <div class="flex gap-3">
                             <button onclick="saveEco()" class="flex-1 py-3 bg-green-500 hover:bg-green-600 text-white font-bold rounded-xl shadow-md transition-all active:scale-95">
                                 <i class="fas fa-check-circle mr-2"></i> LƯU LỊCH TRÌNH
@@ -1387,6 +1128,7 @@
                                     <i class="fas fa-circle" style="font-size:7px"></i> Chờ
                                 </span>
                             </div>
+                            <!-- Ô nhập giờ/phút/giây -->
                             <div class="flex items-center justify-center gap-3 mb-4">
                                 <div class="flex flex-col items-center gap-1">
                                     <button onclick="adjustTimer('h',1)" class="w-8 h-6 rounded-lg bg-slate-200 hover:bg-emerald-100 text-slate-600 hover:text-emerald-600 font-black text-sm transition">+</button>
@@ -1410,15 +1152,18 @@
                                 </div>
                             </div>
 
+                            <!-- Hiển thị đếm ngược -->
                             <div id="timer-display" class="text-center mb-3 hidden">
                                 <div class="text-3xl font-black text-emerald-600 font-mono tracking-widest" id="timer-countdown">00:00:00</div>
                                 <p class="text-xs text-slate-400 font-semibold mt-1" id="timer-remain-text">còn lại</p>
                             </div>
 
+                            <!-- Progress bar — chỉ hiện khi đang đếm -->
                             <div class="timer-progress mb-3" id="timer-progress-wrap" style="display:none;">
                                 <div class="timer-progress-bar" id="timer-progress-bar" style="width:100%"></div>
                             </div>
 
+                            <!-- Nút điều khiển -->
                             <div class="flex gap-2 mt-3 mb-1">
                                 <button onclick="startTimer()" id="btn-timer-start"
                                     class="flex-1 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-xl text-sm transition-all active:scale-95">
@@ -1430,12 +1175,13 @@
                                 </button>
                             </div>
 
+                            <!-- Status bar ECO -->
                             <div id="fan-status-bar-eco" class="flex items-center justify-center gap-2 mb-3 font-bold"
                                 style="color:#991b1b; font-size:1.1rem;">
                                 <i class="fas fa-circle" style="font-size:9px"></i>
                                 <span id="fan-status-text-eco">Quạt đã được tắt</span>
                             </div>
-
+                            
                             <!-- MINI CARDS ECO -->
                             <div class="space-y-2 mb-4 pt-3 border-t border-slate-100">
                                 <div class="mini-card">
@@ -1501,6 +1247,7 @@
                             </div>
                         </div>
 
+                        <!-- MINI CARD SMART -->
                         <div class="mini-card w-full mb-4">
                             <div>
                                 <p class="text-xs font-semibold text-slate-500 mb-0.5">TỔNG NĂNG LƯỢNG</p>
@@ -1510,8 +1257,12 @@
                                 <i class="fas fa-chart-bar text-sm"></i>
                             </div>
                         </div>
-                        <div id="fan-status-bar-smart-2" class="flex items-center justify-center gap-2 mb-3 font-bold"
-                            style="color:#991b1b; font-size:1.1rem;"></div>
+                        <!-- Status bar SMART -->
+                        <div id="fan-status-bar-smart" class="flex items-center justify-center gap-2 mb-3 font-bold"
+                            style="color:#991b1b; font-size:1.1rem;">
+                            
+                            
+                        </div>
                         <div class="flex gap-2 mb-2 w-full">
                             <button onclick="startSmart()" class="flex-1 py-4 bg-purple-500 hover:bg-purple-600 text-white font-bold rounded-xl shadow-md transition-all active:scale-95 text-sm">
                                 <i class="fas fa-play mr-2"></i> Bắt đầu
@@ -1521,11 +1272,13 @@
                             </button>
                         </div>
 
+                        <!-- Thông báo thành công -->
                         <div id="smart-start-msg" class="items-center justify-center gap-2 px-4 py-2 bg-emerald-50 border border-emerald-200 rounded-xl mb-2" style="display:none;">
                             <i class="fas fa-check-circle text-emerald-500 text-sm"></i>
                             <span class="text-emerald-700 text-xs font-bold">Đã bắt đầu chế độ SMART!</span>
                         </div>
 
+                        <!-- Thông báo hủy -->
                         <div id="smart-cancel-msg" class="items-center justify-center gap-2 px-4 py-2 bg-red-50 border border-red-200 rounded-xl mb-2" style="display:none;">
                             <i class="fas fa-times-circle text-red-500 text-sm"></i>
                             <span class="text-red-700 text-xs font-bold">Đã hủy chế độ SMART!</span>
@@ -1543,27 +1296,6 @@
 
     <script>
     const USER_ROLE = "{{ role }}";
-
-    // ── Mobile Navigation Handler ─────────────────────────
-    function isMobile() {
-        return window.innerWidth <= 767;
-    }
-
-    function mobileNav(page) {
-        // Cập nhật active state bottom nav
-        ['main','home','settings','report','history'].forEach(p => {
-            const btn = document.getElementById('mobnav-' + p);
-            if (btn) btn.classList.toggle('active', p === page);
-        });
-
-        // Điều hướng tới trang tương ứng
-        if (page === 'main')     openMain();
-        else if (page === 'home')     openHome();
-        else if (page === 'settings') openSettings();
-        else if (page === 'report')   openReport();
-        else if (page === 'history')  openHistory();
-    }
-
     // ── ĐỒNG HỒ ──────────────────────────────────────────
     function updateTime() {
         const now = new Date();
@@ -1574,48 +1306,59 @@
 
     // ── ĐIỀU HƯỚNG TRANG ─────────────────────────────────
     function openHome() {
-        window.scrollTo(0, 0);
-        document.querySelector('header').style.display = '';
+        document.querySelector('header').style.display = 'none';
+        function resetSidebar() {
+            document.querySelectorAll('#sidebar nav a').forEach(a => {
+                a.className = 'flex items-center gap-3 px-4 py-3 text-slate-500 hover:bg-slate-50 hover:text-slate-700 rounded-xl font-medium transition';
+            });
+        }
         document.getElementById('page-history').style.display = 'none';
         document.getElementById('page-report').style.display = 'none';
         document.getElementById('page-home').style.display = 'block';
         document.getElementById('page-main').style.display = 'none';
         document.getElementById('page-settings').style.display = 'none';
-        resetSidebar();
+        document.querySelectorAll('#sidebar nav a').forEach(a => {
+            a.className = 'flex items-center gap-3 px-4 py-3 text-slate-500 hover:bg-slate-50 hover:text-slate-700 rounded-xl font-medium transition';
+        });
         document.querySelector('#sidebar nav a:first-child').className =
             'flex items-center gap-3 px-4 py-3 bg-emerald-50 text-emerald-700 rounded-xl font-semibold';
-        // mobile: ẩn header khi ở trang dự án
-        if (isMobile()) document.querySelector('header').style.display = 'none';
     }
 
     function openMain() {
-        window.scrollTo(0, 0);
         document.querySelector('header').style.display = '';
+        function resetSidebar() {
+            document.querySelectorAll('#sidebar nav a').forEach(a => {
+                a.className = 'flex items-center gap-3 px-4 py-3 text-slate-500 hover:bg-slate-50 hover:text-slate-700 rounded-xl font-medium transition';
+            });
+        }
         resetSidebar();
         document.getElementById('page-history').style.display = 'none';
         document.getElementById('page-report').style.display = 'none';
         document.getElementById('page-home').style.display = 'none';
-        document.getElementById('page-main').style.display = isMobile() ? 'flex' : 'grid';
+        document.getElementById('page-main').style.display = 'grid';
         document.getElementById('page-settings').style.display = 'none';
-        // Sync bottom nav
-        ['main','home','settings','report','history'].forEach(p => {
-            const btn = document.getElementById('mobnav-' + p);
-            if (btn) btn.classList.toggle('active', p === 'main');
-        });
     }
 
     function openSettings() {
-        window.scrollTo(0, 0);
         document.querySelector('header').style.display = 'none';
+        function resetSidebar() {
+            document.querySelectorAll('#sidebar nav a').forEach(a => {
+                a.className = 'flex items-center gap-3 px-4 py-3 text-slate-500 hover:bg-slate-50 hover:text-slate-700 rounded-xl font-medium transition';
+            });
+        }
         document.getElementById('page-history').style.display = 'none';
         document.getElementById('page-report').style.display = 'none';
+
         document.getElementById('page-home').style.display = 'none';
         document.getElementById('page-main').style.display = 'none';
         document.getElementById('page-settings').style.display = 'block';
-        resetSidebar();
+        document.querySelectorAll('#sidebar nav a').forEach(a => {
+            a.className = 'flex items-center gap-3 px-4 py-3 text-slate-500 hover:bg-slate-50 hover:text-slate-700 rounded-xl font-medium transition';
+        });
         document.querySelectorAll('#sidebar nav a')[1].className =
             'flex items-center gap-3 px-4 py-3 bg-orange-50 text-orange-600 rounded-xl font-semibold';
         updateSettings();
+        // Load giá trị hiện tại từ server khi mở trang
         fetch('/settings/temp_threshold/get')
             .then(r => r.json())
             .then(data => {
@@ -1630,7 +1373,7 @@
                 document.getElementById('high-rpm-slider').value = data.high_rpm;
                 updateSettings();
             }).catch(e => {});
-    }
+            }
 
     // ── NGƯỠNG NHIỆT ─────────────────────────────────────
     const DEFAULT_SETTINGS = { lowMax:25, midMax:32, lowRpm:30, midRpm:60, highRpm:100 };
@@ -1641,21 +1384,32 @@
         const lowRpm  = parseInt(document.getElementById('low-rpm').value)  || 0;
         const midRpm  = parseInt(document.getElementById('mid-rpm').value)  || 0;
         const highRpm = parseInt(document.getElementById('high-rpm').value) || 0;
+
+        // Sync min readonly
         document.getElementById('mid-min').value  = lowMax;
         document.getElementById('high-min').value = midMax;
+
+        // Sync slider
         document.getElementById('low-rpm-slider').value  = lowRpm;
         document.getElementById('mid-rpm-slider').value  = midRpm;
         document.getElementById('high-rpm-slider').value = highRpm;
+
+        // Hiện RPM disp
         document.getElementById('low-rpm-disp').innerText  = lowRpm  + ' RPM';
         document.getElementById('mid-rpm-disp').innerText  = midRpm  + ' RPM';
         document.getElementById('high-rpm-disp').innerText = highRpm + ' RPM';
+
+        // Label thanh nhiệt
         document.getElementById('ind-low-label').innerText = lowMax + '°C';
         document.getElementById('ind-mid-label').innerText = midMax + '°C';
+
+        // Cập nhật active zone nếu có nhiệt độ
         const curTemp = parseFloat(document.getElementById('settings-temp-val').innerText);
         if (!isNaN(curTemp)) highlightZone(curTemp, lowMax, midMax);
     }
 
     function highlightZone(temp, lowMax, midMax) {
+        // Reset tất cả
         document.getElementById('card-low').classList.remove('active-zone');
         document.getElementById('card-mid').classList.remove('active-zone');
         document.getElementById('card-high').classList.remove('active-zone');
@@ -1665,6 +1419,8 @@
         document.getElementById('badge-mid').className  = 'px-2 py-0.5 bg-amber-100 text-amber-700 text-xs font-bold rounded-full border border-amber-200';
         document.getElementById('badge-high').innerText = '● Chờ';
         document.getElementById('badge-high').className = 'px-2 py-0.5 bg-red-100 text-red-700 text-xs font-bold rounded-full border border-red-200';
+
+        // Active đúng mức
         let zone = temp < lowMax ? 'low' : temp < midMax ? 'mid' : 'high';
         document.getElementById('card-' + zone).classList.add('active-zone');
         const badge = document.getElementById('badge-' + zone);
@@ -1679,32 +1435,46 @@
         const t = parseFloat(temp);
         const lowMax = parseInt(document.getElementById('low-max').value) || 25;
         const midMax = parseInt(document.getElementById('mid-max').value) || 32;
+
         const el    = document.getElementById('settings-temp-val');
         const badge = document.getElementById('settings-temp-badge');
         const bg    = document.getElementById('settings-temp-bg');
         const icon  = document.getElementById('settings-temp-icon');
         const ind   = document.getElementById('temp-indicator');
         if (!el) return;
+
         el.innerText = t.toFixed(1);
+
+        // Kim chỉ vị trí (0–50°C)
         const pct = Math.min(Math.max((t / 50) * 100, 2), 97);
         if (ind) ind.style.left = pct + '%';
+
         if (t < lowMax) {
-            el.style.color = '#3b82f6';
-            badge.innerText = 'Thấp';
-            badge.className = 'inline-block mt-1 px-3 py-0.5 bg-blue-50 text-blue-600 text-xs font-bold rounded-full border border-blue-100';
-            bg.style.background = '#eff6ff'; icon.style.color = '#3b82f6';
-        } else if (t < midMax) {
-            el.style.color = '#f59e0b';
-            badge.innerText = 'Trung bình';
-            badge.className = 'inline-block mt-1 px-3 py-0.5 bg-amber-50 text-amber-600 text-xs font-bold rounded-full border border-amber-100';
-            bg.style.background = '#fffbeb'; icon.style.color = '#f59e0b';
-        } else {
-            el.style.color = '#ef4444';
-            badge.innerText = 'Cao';
-            badge.className = 'inline-block mt-1 px-3 py-0.5 bg-red-50 text-red-600 text-xs font-bold rounded-full border border-red-100';
-            bg.style.background = '#fff1f2'; icon.style.color = '#ef4444';
-        }
-        highlightZone(t, lowMax, midMax);
+                el.style.color = '#3b82f6';
+                badge.innerText = 'Thấp';
+                badge.className = 'inline-block mt-1 px-3 py-0.5 bg-blue-50 text-blue-600 text-xs font-bold rounded-full border border-blue-100';
+                bg.style.background = '#eff6ff'; icon.style.color = '#3b82f6';
+            } else if (t < midMax) {
+                el.style.color = '#f59e0b';
+                badge.innerText = 'Trung bình';
+                badge.className = 'inline-block mt-1 px-3 py-0.5 bg-amber-50 text-amber-600 text-xs font-bold rounded-full border border-amber-100';
+                bg.style.background = '#fffbeb'; icon.style.color = '#f59e0b';
+            } else {
+                el.style.color = '#ef4444';
+                badge.innerText = 'Cao';
+                badge.className = 'inline-block mt-1 px-3 py-0.5 bg-red-50 text-red-600 text-xs font-bold rounded-full border border-red-100';
+                bg.style.background = '#fff1f2'; icon.style.color = '#ef4444';
+            }
+            highlightZone(t, lowMax, midMax);
+    }
+
+    function resetSettings() {
+        document.getElementById('low-max').value  = DEFAULT_SETTINGS.lowMax;
+        document.getElementById('mid-max').value  = DEFAULT_SETTINGS.midMax;
+        document.getElementById('low-rpm').value  = DEFAULT_SETTINGS.lowRpm;
+        document.getElementById('mid-rpm').value  = DEFAULT_SETTINGS.midRpm;
+        document.getElementById('high-rpm').value = DEFAULT_SETTINGS.highRpm;
+        updateSettings();
     }
 
     async function saveSettings() {
@@ -1722,8 +1492,12 @@
                 body: JSON.stringify(payload)
             });
             const data = await res.json();
-            if (data.status === 'ok') showSettingsMsg('save');
-        } catch(e) { alert('Lỗi kết nối server!'); }
+            if (data.status === 'ok') {
+                showSettingsMsg('save');
+            }
+        } catch(e) {
+            alert('Lỗi kết nối server!');
+        }
     }
 
     async function resetSettings() {
@@ -1739,13 +1513,17 @@
         try {
             const res = await fetch('/settings/temp_threshold/reset', { method:'POST' });
             const data = await res.json();
-            if (data.status === 'ok') showSettingsMsg('reset');
+            if (data.status === 'ok') {
+                showSettingsMsg('reset');
+            }
         } catch(e) {}
     }
 
     function showSettingsMsg(type) {
+        // Xóa thông báo cũ nếu có
         const old = document.getElementById('settings-msg-box');
         if (old) old.remove();
+
         const isReset = type === 'reset';
         const div = document.createElement('div');
         div.id = 'settings-msg-box';
@@ -1756,13 +1534,18 @@
             background:${isReset ? '#fffbeb' : '#d1fae5'};
             border:1.5px solid ${isReset ? '#fde68a' : '#6ee7b7'};
             color:${isReset ? '#92400e' : '#065f46'};
+            animation: fadeInDown .3s ease;
         `;
         div.innerHTML = `
             <i class="fas ${isReset ? 'fa-undo text-amber-500' : 'fa-check-circle text-emerald-500'}"></i>
             <span>${isReset ? 'Đã reset về mặc định thành công!' : 'Lưu cài đặt thành công!'}</span>
         `;
+
+        // Chèn trước nút hành động
         const btnRow = document.querySelector('#page-settings .flex.gap-3.pb-4');
-        if (btnRow) btnRow.parentNode.insertBefore(div, btnRow);
+        btnRow.parentNode.insertBefore(div, btnRow);
+
+        // Tự ẩn sau 3 giây
         setTimeout(() => { div.remove(); }, 3000);
     }
 
@@ -1808,7 +1591,9 @@
         const msg = document.getElementById('eco-save-msg');
         msg.style.display = 'flex';
         setTimeout(() => { msg.style.display = 'none'; }, 1000);
-        updateFanStatusBar('turning_on');
+
+        updateFanStatusBar('turning_on'); // ← thêm dòng này
+
         fetch('/eco/save', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
@@ -1822,7 +1607,8 @@
                 rpm      : ecoSpeed
             })
         }).then(r => r.json()).then(data => {
-            updateFanStatusBar('on');
+            // Sau khi server phản hồi mới cập nhật đúng trạng thái
+            updateFanStatusBar('on');  // ← thêm dòng này
         }).catch(e => {});
     }
 
@@ -1831,6 +1617,7 @@
     function startPolling(){
         pollInterval=setInterval(async()=>{
             try{
+                
                 const r=await fetch('/people_count');
                 const d=await r.json();
                 if(d.count!==null){
@@ -1840,10 +1627,9 @@
         },2000);
     }
     function stopPolling(){clearInterval(pollInterval);pollInterval=null;}
-
+    
     function updateCpuBadge(temp) {
         const badge = document.getElementById('rpt-cpu-badge');
-        if (!badge) return;
         if (temp < 60) {
             badge.className = 'inline-block mt-1 px-2 py-0.5 text-xs font-bold rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100';
             badge.textContent = 'Bình thường';
@@ -1868,6 +1654,7 @@
         } catch(e) {}
     }, 5000);
 
+    // ── MÀU THEO MỨC NHIỆT ────────────────────────────────
     const TEMP_COLOR = {
         'Quạt tắt'          : '#94a3b8',
         'Chậm'              : '#3b82f6',
@@ -1876,18 +1663,28 @@
         'Không có cảm biến' : '#94a3b8',
     };
 
+    // ── CẬP NHẬT UI NHIỆT ĐỘ ─────────────────────────────
     function updateTempUI(temp, level) {
         const color = TEMP_COLOR[level] || '#94a3b8';
         const overlayEl = document.getElementById('temp-overlay-val');
+
         if (temp !== null && temp !== undefined) {
             const t = parseFloat(temp).toFixed(1);
+
+            // Panel Manual
             const pt = document.getElementById('panel-temp');       if(pt) pt.innerText = t;
             const pu = document.getElementById('panel-temp-unit');   if(pu) pu.innerText = ' °C';
             const pl = document.getElementById('panel-temp-level');  if(pl){ pl.innerText = level; pl.style.color = color; }
             const pi = document.getElementById('panel-temp-icon');   if(pi) pi.style.color = color;
+
+            // Panel Eco
             const pe  = document.getElementById('panel-temp-eco');      if(pe)  pe.innerText = t;
             const peu = document.getElementById('panel-temp-unit-eco');  if(peu) peu.innerText = ' °C';
+
+            // Overlay camera
             if(overlayEl) overlayEl.innerText = t + ' °C';
+
+            // Smart panel
             const sd = document.getElementById('smart-temp-disp');  if(sd){ sd.innerText = t; sd.style.color = color; }
             const sl = document.getElementById('smart-temp-level');  if(sl){ sl.innerText = level; sl.style.color = color; }
         } else {
@@ -1899,14 +1696,17 @@
         }
     }
 
+    
+    // ── POLL NHIỆT ĐỘ mỗi 3 giây ─────────────────────────
     setInterval(async () => {
         try {
             const res  = await fetch('/temperature');
             const data = await res.json();
             updateTempUI(data.temp, data.level);
-            updateSettingsTemp(data.temp);
+            updateSettingsTemp(data.temp); // ← thêm dòng này
         } catch(e) {}
     }, 3000);
+    
 
     // ── MODE ──────────────────────────────────────────────
     function setMode(mode) {
@@ -1914,13 +1714,17 @@
             b.className="mode-btn px-4 md:px-12 py-10 rounded-xl text-xl font-bold text-slate-500 hover:text-slate-700 transition-all";
         });
         document.getElementById(`btn-${mode}`).className="mode-btn px-4 md:px-12 py-10 rounded-xl text-xl font-bold transition-all bg-white shadow-sm text-emerald-600";
+
         ['Manual','Eco','Smart'].forEach(m=>{document.getElementById(`panel-${m}`).style.display='none';});
         document.getElementById(`panel-${mode}`).style.display='flex';
         document.getElementById('panel-title').innerHTML = `Cài đặt ${mode}`;
+
         const cs = document.getElementById('cam-status');
         const po = document.getElementById('people-overlay');
         const to = document.getElementById('temp-overlay');
+
         fetch('/set_mode',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode})});
+
         if (mode === 'Smart') {
             startPolling();
             cs.innerText = 'AI ON';
@@ -1941,36 +1745,16 @@
     function applyTheme(){
         const icon=document.getElementById('theme-icon');
         const lbl=document.getElementById('theme-label');
-        const iconMob=document.getElementById('theme-icon-mobile');
-        if(isDark){
-            document.body.classList.add('dark');
-            if(icon) { icon.className='fas fa-sun'; }
-            if(lbl)  lbl.innerText='Giao diện sáng';
-            if(iconMob) iconMob.className='fas fa-sun text-sm';
-            // dark mode bottom nav
-            const nav = document.getElementById('mobile-bottom-nav');
-            if(nav) { nav.style.background='#1e293b'; nav.style.borderColor='#334155'; }
-        } else {
-            document.body.classList.remove('dark');
-            if(icon) { icon.className='fas fa-moon'; }
-            if(lbl)  lbl.innerText='Giao diện tối';
-            if(iconMob) iconMob.className='fas fa-moon text-sm';
-            const nav = document.getElementById('mobile-bottom-nav');
-            if(nav) { nav.style.background=''; nav.style.borderColor=''; }
-        }
+        if(isDark){document.body.classList.add('dark');icon.className='fas fa-sun';lbl.innerText='Giao diện sáng';}
+        else{document.body.classList.remove('dark');icon.className='fas fa-moon';lbl.innerText='Giao diện tối';}
     }
     function toggleTheme(){isDark=!isDark;localStorage.setItem('theme',isDark?'dark':'light');applyTheme();}
-    function handleSidebar(){
-        const sidebar = document.getElementById('sidebar');
-        if (window.innerWidth >= 768) {
-            sidebar.style.display = 'flex';
-        } else {
-            sidebar.style.display = 'none';
-        }
-    }
-    window.addEventListener('resize', handleSidebar);
+    function handleSidebar(){document.getElementById('sidebar').style.display=window.innerWidth>=768?'flex':'none';}
+    window.addEventListener('resize',handleSidebar);
 
-    // ── ĐIỀU KHIỂN BIẾN TẦN — MANUAL ──────────────────────
+    // ══════════════════════════════════════════════════════
+    // ĐIỀU KHIỂN BIẾN TẦN — MANUAL
+    // ══════════════════════════════════════════════════════
     function previewRPM(val) {
         const hz  = (val / 2).toFixed(1);
         const txt = parseInt(val) > 0 ? parseInt(val) + ' RPM' : '—';
@@ -1995,42 +1779,57 @@
 
     async function fanOn() {
         if (USER_ROLE !== 'admin') { alert('⚠️ Bạn chỉ có quyền xem!'); return; }
-        updateFanStatusBar('turning_on');
+        updateFanStatusBar('turning_on');  // ← thêm dòng này
         let rpm = parseFloat(document.getElementById('rpm-slider').value);
         if (rpm <= 0) rpm = 33;
         document.getElementById('rpm-slider').value = rpm;
         previewRPM(rpm);
         await sendRPM(rpm);
-        updateFanStatusBar('on');
+        updateFanStatusBar('on');  // ← thêm dòng này
     }
 
     async function fanOff() {
         if (USER_ROLE !== 'admin') { alert('⚠️ Bạn chỉ có quyền xem!'); return; }
-        updateFanStatusBar('turning_off');
+        updateFanStatusBar('turning_off');  // ← thêm dòng này
         try {
             await fetch('/fan/stop', {method:'POST'});
             updateFanUI(0, 0, false);
             document.getElementById('rpm-slider').value = 0;
             previewRPM(0);
-            updateFanStatusBar('off');
+            updateFanStatusBar('off');  // ← thêm dòng này
         } catch(e) {}
     }
 
+    // ── ANIMATE RPM COUNT-UP ─────────────────────────────
     const rpmAnimState = {};
+
     function animateRPM(elementId, targetVal, duration = 1200) {
         const el = document.getElementById(elementId);
         if (!el) return;
-        if (rpmAnimState[elementId]) cancelAnimationFrame(rpmAnimState[elementId]);
+
+        // Hủy animation cũ nếu đang chạy
+        if (rpmAnimState[elementId]) {
+            cancelAnimationFrame(rpmAnimState[elementId]);
+        }
+
         const startVal  = parseFloat(el.dataset.currentVal || 0);
         const startTime = performance.now();
         const diff      = targetVal - startVal;
+
+        // Nếu giá trị không đổi → không animate
         if (Math.abs(diff) < 0.5) return;
+
         function step(now) {
             const elapsed  = now - startTime;
             const progress = Math.min(elapsed / duration, 1);
+
+            // Easing: ease-out (giảm dần về cuối)
             const eased = 1 - Math.pow(1 - progress, 3);
             const cur   = startVal + diff * eased;
+
             const rounded = Math.round(cur);
+
+            // Cập nhật text theo từng element
             if (elementId === 'smart-rpm-disp') {
                 el.innerText = targetVal === 0 ? '—' : rounded;
             } else if (elementId === 'panel-speed' || elementId === 'panel-speed-eco') {
@@ -2038,9 +1837,11 @@
             } else {
                 el.innerText = rounded;
             }
+
             if (progress < 1) {
                 rpmAnimState[elementId] = requestAnimationFrame(step);
             } else {
+                // Đảm bảo giá trị cuối chính xác
                 if (elementId === 'smart-rpm-disp') {
                     el.innerText = targetVal === 0 ? '—' : Math.round(targetVal);
                 } else if (elementId === 'panel-speed' || elementId === 'panel-speed-eco') {
@@ -2051,23 +1852,35 @@
                 el.dataset.currentVal = targetVal;
                 delete rpmAnimState[elementId];
             }
+
             el.dataset.currentVal = cur;
         }
+
         rpmAnimState[elementId] = requestAnimationFrame(step);
     }
 
     function updateFanUI(rpm, hz, running) {
         rpm = parseFloat(rpm) || 0;
         const targetRPM = running && rpm > 0 ? rpm : 0;
+
+        // Animate tất cả các ô RPM
         animateRPM('panel-speed',     targetRPM);
         animateRPM('panel-speed-eco', targetRPM);
         animateRPM('smart-rpm-disp',  targetRPM);
+
+        // Hz cập nhật ngay (không cần animate)
         const hzVal = parseFloat(hz).toFixed(1);
         document.getElementById('disp-hw').innerText = 'Biến tần: ' + hzVal + ' Hz';
+
         const smartHz = document.getElementById('smart-hz-disp');
-        if (smartHz) smartHz.innerText = running && rpm > 0 ? '/ ' + hzVal + ' Hz' : '';
+        if (smartHz) {
+            smartHz.innerText = running && rpm > 0 ? '/ ' + hzVal + ' Hz' : '';
+        }
+
+        // Badge & icon quạt
         const badge = document.getElementById('fan-state-badge');
         const pIcon = document.getElementById('panel-fan-icon');
+
         if (running && rpm > 0) {
             badge.className = 'fan-state on';
             badge.innerHTML = '<i class="fas fa-circle" style="font-size:7px"></i> Đang chạy';
@@ -2079,29 +1892,40 @@
         }
     }
 
+    // Poll trạng thái biến tần mỗi 3 giây
     setInterval(async () => {
         try {
             const res  = await fetch('/fan/status');
             const data = await res.json();
+
             if (data.hw_hz !== null)
                 document.getElementById('disp-hw').innerText = 'HW: ' + data.hw_hz + ' Hz';
+
             updateFanUI(data.rpm, data.hz, data.running);
+
             if (!data.ai_mode && !sliderDragging)
                 document.getElementById('rpm-slider').value = Math.round(data.rpm);
+
+            // Smart panel — luôn cập nhật RPM, chỉ cần quạt đang chạy
             document.getElementById('smart-rpm-disp').innerText = data.running ? Math.round(data.rpm) : '—';
             document.getElementById('smart-hz-disp').innerText  = data.running ? '/ ' + parseFloat(data.hz).toFixed(1) + ' Hz' : '';
+
             if (data.smart_active && data.people !== null) {
                 document.getElementById('people-count-overlay').innerText = data.people + ' người';
                 document.getElementById('smart-people-lbl').innerText     = data.people + ' người';
             } else {
                 document.getElementById('smart-people-lbl').innerText = '— người';
             }
-            if (data.temp !== undefined) updateTempUI(data.temp, data.temp_level);
+
+            // Cập nhật nhiệt độ từ fan/status (nếu có)
+            if (data.temp !== undefined)
+                updateTempUI(data.temp, data.temp_level);
+
         } catch(e) {}
     }, 3000);
-
     // ── BÁO CÁO ──────────────────────────────────────────
     let reportChart = null;
+
     const REPORT_DATA = {
         today: {
             energy:'1.250', uptime:'18 giờ 32 phút', avgtemp:'28.5', aicount:'47',
@@ -2124,14 +1948,20 @@
     };
 
     function openReport() {
-        window.scrollTo(0, 0);
         document.querySelector('header').style.display = 'none';
+        function resetSidebar() {
+            document.querySelectorAll('#sidebar nav a').forEach(a => {
+                a.className = 'flex items-center gap-3 px-4 py-3 text-slate-500 hover:bg-slate-50 hover:text-slate-700 rounded-xl font-medium transition';
+            });
+        }
         document.getElementById('page-history').style.display = 'none';
         document.getElementById('page-home').style.display     = 'none';
         document.getElementById('page-main').style.display     = 'none';
         document.getElementById('page-settings').style.display = 'none';
         document.getElementById('page-report').style.display   = 'block';
-        resetSidebar();
+        document.querySelectorAll('#sidebar nav a').forEach(a => {
+            a.className = 'flex items-center gap-3 px-4 py-3 text-slate-500 hover:bg-slate-50 hover:text-slate-700 rounded-xl font-medium transition';
+        });
         document.querySelectorAll('#sidebar nav a')[2].className =
             'flex items-center gap-3 px-4 py-3 bg-blue-50 text-blue-600 rounded-xl font-semibold';
         setFilter('today');
@@ -2155,16 +1985,28 @@
                 labels: d.labels,
                 datasets: [
                     {
-                        label: 'Nhiệt độ (°C)', data: d.temps,
-                        borderColor: '#f87171', backgroundColor: 'rgba(248,113,113,0.08)',
-                        borderWidth: 2.5, pointBackgroundColor: '#f87171', pointRadius: 4,
-                        tension: 0.4, fill: true, yAxisID: 'y',
+                        label: 'Nhiệt độ (°C)',
+                        data: d.temps,
+                        borderColor: '#f87171',
+                        backgroundColor: 'rgba(248,113,113,0.08)',
+                        borderWidth: 2.5,
+                        pointBackgroundColor: '#f87171',
+                        pointRadius: 4,
+                        tension: 0.4,
+                        fill: true,
+                        yAxisID: 'y',
                     },
                     {
-                        label: 'Tốc độ quạt (RPM)', data: d.rpms,
-                        borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,0.06)',
-                        borderWidth: 2.5, pointBackgroundColor: '#3b82f6', pointRadius: 4,
-                        tension: 0.4, fill: true, yAxisID: 'y1',
+                        label: 'Tốc độ quạt (RPM)',
+                        data: d.rpms,
+                        borderColor: '#3b82f6',
+                        backgroundColor: 'rgba(59,130,246,0.06)',
+                        borderWidth: 2.5,
+                        pointBackgroundColor: '#3b82f6',
+                        pointRadius: 4,
+                        tension: 0.4,
+                        fill: true,
+                        yAxisID: 'y1',
                     }
                 ]
             },
@@ -2173,12 +2015,31 @@
                 interaction: { mode:'index', intersect:false },
                 plugins: {
                     legend: { display:false },
-                    tooltip: { backgroundColor: '#1e293b', titleColor: '#94a3b8', bodyColor: '#e2e8f0', padding: 10, cornerRadius: 10 }
+                    tooltip: {
+                        backgroundColor: '#1e293b',
+                        titleColor: '#94a3b8',
+                        bodyColor: '#e2e8f0',
+                        padding: 10,
+                        cornerRadius: 10,
+                    }
                 },
                 scales: {
-                    x: { grid: { color:'rgba(0,0,0,0.05)' }, ticks: { font:{ weight:'700', size:11 }, color:'#94a3b8' } },
-                    y: { position: 'left', title: { display:true, text:'°C', color:'#f87171', font:{weight:'700'} }, grid: { color:'rgba(0,0,0,0.05)' }, ticks: { color:'#f87171', font:{weight:'700'} } },
-                    y1: { position: 'right', title: { display:true, text:'RPM', color:'#3b82f6', font:{weight:'700'} }, grid: { drawOnChartArea:false }, ticks: { color:'#3b82f6', font:{weight:'700'} } }
+                    x: {
+                        grid: { color:'rgba(0,0,0,0.05)' },
+                        ticks: { font:{ weight:'700', size:11 }, color:'#94a3b8' }
+                    },
+                    y: {
+                        position: 'left',
+                        title: { display:true, text:'°C', color:'#f87171', font:{weight:'700'} },
+                        grid: { color:'rgba(0,0,0,0.05)' },
+                        ticks: { color:'#f87171', font:{weight:'700'} }
+                    },
+                    y1: {
+                        position: 'right',
+                        title: { display:true, text:'RPM', color:'#3b82f6', font:{weight:'700'} },
+                        grid: { drawOnChartArea:false },
+                        ticks: { color:'#3b82f6', font:{weight:'700'} }
+                    }
                 }
             }
         });
@@ -2244,17 +2105,24 @@
         'ECO'    : 'background:#d1fae5; color:#065f46;',
         'MANUAL' : 'background:#f1f5f9; color:#475569;',
     };
+
     let currentPeriod = '1m';
 
     function openHistory() {
-        window.scrollTo(0, 0);
         document.querySelector('header').style.display = 'none';
+        function resetSidebar() {
+            document.querySelectorAll('#sidebar nav a').forEach(a => {
+                a.className = 'flex items-center gap-3 px-4 py-3 text-slate-500 hover:bg-slate-50 hover:text-slate-700 rounded-xl font-medium transition';
+            });
+        }
         document.getElementById('page-home').style.display     = 'none';
         document.getElementById('page-main').style.display     = 'none';
         document.getElementById('page-settings').style.display = 'none';
         document.getElementById('page-report').style.display   = 'none';
         document.getElementById('page-history').style.display  = 'block';
-        resetSidebar();
+        document.querySelectorAll('#sidebar nav a').forEach(a => {
+            a.className = 'flex items-center gap-3 px-4 py-3 text-slate-500 hover:bg-slate-50 hover:text-slate-700 rounded-xl font-medium transition';
+        });
         document.querySelectorAll('#sidebar nav a')[3].className =
             'flex items-center gap-3 px-4 py-3 bg-indigo-50 text-indigo-600 rounded-xl font-semibold';
         setPeriod('1m');
@@ -2266,12 +2134,17 @@
             document.getElementById('period-' + p).className =
                 p === period ? 'period-btn active' : 'period-btn';
         });
+
         const d = HISTORY_DATA[period];
+
+        // Cập nhật stat cards
         document.getElementById('his-energy').innerHTML  = d.energy;
         document.getElementById('his-avgtemp').innerHTML = d.avgtemp;
         document.getElementById('his-uptime').innerHTML  = d.uptime;
         document.getElementById('his-aicount').innerHTML = d.aicount;
         document.getElementById('his-count').innerText   = d.events.length + ' sự kiện';
+
+        // Render bảng
         const tbody = document.getElementById('history-table-body');
         tbody.innerHTML = '';
         d.events.forEach(ev => {
@@ -2291,6 +2164,8 @@
     function exportExcel() {
         const d = HISTORY_DATA[currentPeriod];
         const periodLabel = { '1m':'1 tháng', '2m':'2 tháng', '3m':'3 tháng' }[currentPeriod];
+
+        // Sheet 1: Tóm tắt
         const summary = [
             ['BÁO CÁO LỊCH SỬ HOẠT ĐỘNG - FANCO AI'],
             ['Kỳ báo cáo:', periodLabel],
@@ -2299,16 +2174,25 @@
             ['TỔNG ĐIỆN NĂNG', 'NHIỆT ĐỘ TB', 'SỐ GIỜ HOẠT ĐỘNG', 'AI CAN THIỆP'],
             [d.energy, d.avgtemp, d.uptime, d.aicount],
         ];
+
+        // Sheet 2: Chi tiết sự kiện
         const detail = [
             ['Thời gian', 'Chế độ', 'Nhiệt độ', 'RPM', 'Số người', 'Sự kiện'],
             ...d.events.map(ev => [ev.time, ev.mode, ev.temp, ev.rpm, ev.people, ev.event])
         ];
+
         const wb = XLSX.utils.book_new();
         const ws1 = XLSX.utils.aoa_to_sheet(summary);
         const ws2 = XLSX.utils.aoa_to_sheet(detail);
-        ws2['!cols'] = [{wch:14}, {wch:8}, {wch:10}, {wch:6}, {wch:8}, {wch:40}];
+
+        // Style cột rộng hơn
+        ws2['!cols'] = [
+            {wch:14}, {wch:8}, {wch:10}, {wch:6}, {wch:8}, {wch:40}
+        ];
+
         XLSX.utils.book_append_sheet(wb, ws1, 'Tóm tắt');
         XLSX.utils.book_append_sheet(wb, ws2, 'Chi tiết sự kiện');
+
         const filename = `FanCoAI_LichSu_${periodLabel.replace(' ','')}_${new Date().toLocaleDateString('vi-VN').replace(/\//g,'-')}.xlsx`;
         XLSX.writeFile(wb, filename);
     }
@@ -2328,28 +2212,39 @@
 
     function startTimer() {
         if (USER_ROLE !== 'admin') { alert('⚠️ Bạn chỉ có quyền xem!'); return; }
+
         const h = parseInt(document.getElementById('timer-h').value) || 0;
         const m = parseInt(document.getElementById('timer-m').value) || 0;
         const s = parseInt(document.getElementById('timer-s').value) || 0;
         const total = h * 3600 + m * 60 + s;
+
         if (total <= 0) { alert('Vui lòng nhập thời gian hẹn giờ!'); return; }
         if (timerInterval) clearInterval(timerInterval);
+
         timerTotal     = total;
         timerRemaining = total;
+
+        // Cập nhật UI
         setTimerBadge('running');
+
         document.getElementById('timer-progress-wrap').style.display = 'block';
         document.getElementById('timer-display').classList.remove('hidden');
         document.getElementById('btn-timer-start').disabled  = true;
         document.getElementById('btn-timer-start').style.opacity = '0.5';
         document.getElementById('btn-timer-cancel').disabled = false;
+
+        // Ẩn ô nhập trong lúc đếm
         ['timer-h','timer-m','timer-s'].forEach(id => {
             document.getElementById(id).disabled = true;
             document.getElementById(id).style.opacity = '0.5';
         });
+
         updateTimerDisplay();
+
         timerInterval = setInterval(() => {
             timerRemaining--;
             updateTimerDisplay();
+
             if (timerRemaining <= 0) {
                 clearInterval(timerInterval);
                 timerInterval = null;
@@ -2370,7 +2265,10 @@
     }
 
     function cancelTimer() {
-        if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+        if (timerInterval) {
+            clearInterval(timerInterval);
+            timerInterval = null;
+        }
         timerRemaining = 0;
         setTimerBadge('waiting');
         document.getElementById('timer-progress-wrap').style.display = 'none';
@@ -2390,17 +2288,28 @@
         const h = Math.floor(timerRemaining / 3600);
         const m = Math.floor((timerRemaining % 3600) / 60);
         const s = timerRemaining % 60;
-        document.getElementById('timer-countdown').innerText = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+        const hh = String(h).padStart(2,'0');
+        const mm = String(m).padStart(2,'0');
+        const ss = String(s).padStart(2,'0');
+
+        document.getElementById('timer-countdown').innerText = `${hh}:${mm}:${ss}`;
+
+        // Tính % còn lại
         const pct = timerTotal > 0 ? (timerRemaining / timerTotal) * 100 : 0;
         document.getElementById('timer-progress-bar').style.width = pct + '%';
+
+        // Đổi màu progress bar khi gần hết
         const bar = document.getElementById('timer-progress-bar');
         if (pct > 50)      bar.style.background = 'linear-gradient(to right, #10b981, #3b82f6)';
         else if (pct > 20) bar.style.background = 'linear-gradient(to right, #f59e0b, #10b981)';
         else               bar.style.background = 'linear-gradient(to right, #ef4444, #f59e0b)';
+
+        // Text còn lại
         const totalMin = Math.ceil(timerRemaining / 60);
-        document.getElementById('timer-remain-text').innerText = timerRemaining >= 60
+        const remainText = timerRemaining >= 60
             ? `còn khoảng ${totalMin} phút nữa`
             : `còn ${timerRemaining} giây nữa`;
+        document.getElementById('timer-remain-text').innerText = remainText;
     }
 
     function setTimerBadge(state) {
@@ -2420,6 +2329,7 @@
         menu.classList.toggle('hidden');
     }
 
+    // Đóng menu khi click ra ngoài
     document.addEventListener('click', function(e) {
         const menu = document.getElementById('repeat-menu');
         if (menu && !menu.classList.contains('hidden')) {
@@ -2442,15 +2352,17 @@
                 : '<i class="fas fa-redo mr-1"></i> Hằng ngày';
         }
     }
-
     async function cancelEco() {
         if (USER_ROLE !== 'admin') { alert('⚠️ Bạn chỉ có quyền xem!'); return; }
-        updateFanStatusBar('turning_off');
+
+        updateFanStatusBar('turning_off'); // ← thêm dòng này
+
         const msg = document.getElementById('eco-cancel-msg');
         msg.style.display = 'flex';
         setTimeout(() => { msg.style.display = 'none'; }, 2000);
+
         fetch('/eco/cancel', { method: 'POST' })
-            .then(() => { updateFanStatusBar('off'); })
+            .then(() => { updateFanStatusBar('off'); }) // ← thêm dòng này
             .catch(e => {});
     }
 
@@ -2460,13 +2372,19 @@
         });
     }
 
-    let ecoSpeed = 33;
-    function setEcoSpeed(rpm) { ecoSpeed = rpm; }
+    // ── ECO SPEED ────────────────────────────────────────
+    let ecoSpeed = 33; // mặc định mức 1
 
+    function setEcoSpeed(rpm) {
+        ecoSpeed = rpm;
+        console.log('[ECO] Mức quạt:', rpm, 'RPM');
+    }
     function startSmart() {
         updateFanStatusBar('turning_on');
-        document.getElementById('smart-cancel-msg').style.display = 'none';
-        document.getElementById('smart-start-msg').style.display  = 'flex';
+        const msgStart  = document.getElementById('smart-start-msg');
+        const msgCancel = document.getElementById('smart-cancel-msg');
+        msgCancel.style.display = 'none';   // ẩn thông báo hủy
+        msgStart.style.display  = 'flex';   // hiện thông báo bắt đầu — giữ nguyên
         fetch('/smart/start', { method:'POST' })
             .then(() => { updateFanStatusBar('on'); })
             .catch(e => {});
@@ -2474,41 +2392,18 @@
 
     function cancelSmart() {
         updateFanStatusBar('turning_off');
-        document.getElementById('smart-start-msg').style.display  = 'none';
-        document.getElementById('smart-cancel-msg').style.display = 'flex';
+        const msgStart  = document.getElementById('smart-start-msg');
+        const msgCancel = document.getElementById('smart-cancel-msg');
+        msgStart.style.display  = 'none';   // ẩn thông báo bắt đầu
+        msgCancel.style.display = 'flex';   // hiện thông báo hủy — giữ nguyên
         fetch('/smart/stop', { method:'POST' })
             .then(() => { updateFanStatusBar('off'); })
             .catch(e => {});
     }
 
+    // ── TRACKING SLIDER DRAG ─────────────────────────────
     let sliderDragging = false;
-
-    function updateFanStatusBar(state) {
-        const ids = [
-            { bar: 'fan-status-bar',       text: 'fan-status-text' },
-            { bar: 'fan-status-bar-eco',   text: 'fan-status-text-eco' },
-            { bar: 'fan-status-bar-smart', text: 'fan-status-text-smart' },
-        ];
-        const styles = {
-            'turning_on'  : { color:'#166534', icon:'fa-circle-notch fa-spin', msg:'Đang bật quạt...' },
-            'on'          : { color:'#065f46', icon:'fa-circle',               msg:'Quạt đã được bật' },
-            'turning_off' : { color:'#9a3412', icon:'fa-circle-notch fa-spin', msg:'Đang tắt quạt...' },
-            'off'         : { color:'#991b1b', icon:'fa-circle',               msg:'Quạt đã được tắt' },
-        };
-        const s = styles[state];
-        ids.forEach(({ bar, text }) => {
-            const barEl  = document.getElementById(bar);
-            const textEl = document.getElementById(text);
-            if (!barEl || !textEl) return;
-            barEl.style.color = s.color;
-            const iconEl = barEl.querySelector('i');
-            if (iconEl) iconEl.className = `fas ${s.icon}`;
-            textEl.innerText = s.msg;
-        });
-    }
-
-    // ══════════════════════════════════════════════════════
-    window.onload = function() {
+    document.addEventListener('DOMContentLoaded', () => {
         const slider = document.getElementById('rpm-slider');
         if (slider) {
             slider.addEventListener('mousedown',  () => { sliderDragging = true; });
@@ -2516,31 +2411,70 @@
             slider.addEventListener('mouseup',    () => { sliderDragging = false; });
             slider.addEventListener('touchend',   () => { sliderDragging = false; });
         }
+    });
 
-        updateFanStatusBar('off');
+    // ── TRẠNG THÁI QUẠT STATUS BAR ───────────────────────
+    function updateFanStatusBar(state) {
+        const ids = [
+            { bar: 'fan-status-bar',       text: 'fan-status-text' },
+            { bar: 'fan-status-bar-eco',   text: 'fan-status-text-eco' },
+            { bar: 'fan-status-bar-smart', text: 'fan-status-text-smart' },
+        ];
+
+        const styles = {
+            'turning_on'  : { color:'#166534', icon:'fa-circle-notch fa-spin', msg:'Đang bật quạt...' },
+            'on'          : { color:'#065f46', icon:'fa-circle',               msg:'Quạt đã được bật' },
+            'turning_off' : { color:'#9a3412', icon:'fa-circle-notch fa-spin', msg:'Đang tắt quạt...' },
+            'off'         : { color:'#991b1b', icon:'fa-circle',               msg:'Quạt đã được tắt' },
+        };
+
+        const s = styles[state];
+        ids.forEach(({ bar, text }) => {
+            const barEl  = document.getElementById(bar);
+            const textEl = document.getElementById(text);
+            if (!barEl || !textEl) return;
+            barEl.style.color = s.color;
+            barEl.querySelector('i').className = `fas ${s.icon}`;
+            textEl.innerText = s.msg;
+        });
+    }
+        // ══════════════════════════════════════════════════════
+    window.onload = function() {
+
+        const slider = document.getElementById('rpm-slider');
+        if (slider) {
+            slider.addEventListener('mousedown',  () => { sliderDragging = true; });
+            slider.addEventListener('touchstart', () => { sliderDragging = true; });
+            slider.addEventListener('mouseup',    () => { sliderDragging = false; });
+            slider.addEventListener('touchend',   () => { sliderDragging = false; });
+        }
+        updateFanStatusBar('off'); // mặc định khi mở web
         applyTheme();
         handleSidebar();
         updateTime();
         generateTimeOptions();
         startHLSStream();
-
         // Mặc định hiển thị trang chính
-        document.getElementById('page-home').style.display     = 'none';
-        document.getElementById('page-main').style.display     = isMobile() ? 'flex' : 'grid';
+        document.getElementById('page-home').style.display = 'none';
+        document.getElementById('page-main').style.display = 'grid';
         document.getElementById('page-settings').style.display = 'none';
-        document.getElementById('page-report').style.display   = 'none';
-        document.getElementById('page-history').style.display  = 'none';
-
+        document.getElementById('page-report').style.display = 'none';
+        document.getElementById('page-history').style.display = 'none';
         // Phân quyền viewer
         if (USER_ROLE !== 'admin') {
+            // Ẩn nút bật/tắt quạt
             document.querySelectorAll('button[onclick="fanOn()"], button[onclick="fanOff()"]')
                 .forEach(b => { b.disabled = true; b.style.opacity = '0.4'; b.style.cursor = 'not-allowed'; });
-            const s = document.getElementById('rpm-slider');
-            if (s) { s.disabled = true; s.style.opacity = '0.4'; }
+            // Vô hiệu slider RPM
+            const slider = document.getElementById('rpm-slider');
+            if (slider) { slider.disabled = true; slider.style.opacity = '0.4'; }
+            // Ẩn nút lưu cài đặt & lưu lịch trình
             document.querySelectorAll('button[onclick="saveSettings()"], button[onclick="saveEco()"]')
                 .forEach(b => { b.disabled = true; b.style.opacity = '0.4'; b.style.cursor = 'not-allowed'; });
+            // Vô hiệu PTZ
             document.querySelectorAll('.ptz-btn')
                 .forEach(b => { b.disabled = true; b.style.opacity = '0.4'; });
+            // Thêm badge "Chỉ xem" trên header
             const badge = document.createElement('span');
             badge.innerHTML = '👁 Chế độ xem';
             badge.style.cssText = 'background:#fef3c7; color:#92400e; font-size:12px; font-weight:700; padding:4px 12px; border-radius:20px; border:1px solid #fde68a;';
