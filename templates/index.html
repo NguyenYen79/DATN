@@ -1765,8 +1765,18 @@
     function applyRPM(val) {
         if (USER_ROLE !== 'admin') return;
         const rpm = parseFloat(val);
+        
+        // Đánh dấu người dùng đang kiểm soát
+        sliderUserControlled = true;
+        clearTimeout(sliderResetTimer);
+        
         if (rpm === 0) { fanOff(); return; }
         sendRPM(rpm);
+        
+        // Sau 5 giây không tương tác mới cho poll ghi đè lại
+        sliderResetTimer = setTimeout(() => {
+            sliderUserControlled = false;
+        }, 5000);
     }
 
     async function sendRPM(rpm) {
@@ -1790,13 +1800,15 @@
 
     async function fanOff() {
         if (USER_ROLE !== 'admin') { alert('⚠️ Bạn chỉ có quyền xem!'); return; }
-        updateFanStatusBar('turning_off');  // ← thêm dòng này
+        updateFanStatusBar('turning_off');
+        sliderUserControlled = false;  // ← thêm dòng này
+        clearTimeout(sliderResetTimer); // ← thêm dòng này
         try {
             await fetch('/fan/stop', {method:'POST'});
             updateFanUI(0, 0, false);
             document.getElementById('rpm-slider').value = 0;
             previewRPM(0);
-            updateFanStatusBar('off');  // ← thêm dòng này
+            updateFanStatusBar('off');
         } catch(e) {}
     }
 
@@ -1903,7 +1915,7 @@
 
             updateFanUI(data.rpm, data.hz, data.running);
 
-            if (!data.ai_mode && !sliderDragging)
+            if (!data.ai_mode && !sliderDragging && !sliderUserControlled)
                 document.getElementById('rpm-slider').value = Math.round(data.rpm);
 
             // Smart panel — luôn cập nhật RPM, chỉ cần quạt đang chạy
@@ -2403,6 +2415,8 @@
 
     // ── TRACKING SLIDER DRAG ─────────────────────────────
     let sliderDragging = false;
+    let sliderUserControlled = false;
+    let sliderResetTimer = null;
     document.addEventListener('DOMContentLoaded', () => {
         const slider = document.getElementById('rpm-slider');
         if (slider) {
