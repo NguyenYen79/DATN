@@ -251,8 +251,12 @@ def set_speed_rpm(rpm):
     return False
 
 def start_motor():
-    r = _write(REG_COMMAND, 1)
-    if not r.isError(): print("[FAN] START"); return True
+    # Thử gửi lại lệnh RUN nhiều lần hoặc kiểm tra giá trị chính xác
+    # Đối với 1 số biến tần, giá trị 1 là RUN, 6 là STOP. 
+    # Nhưng hãy thử giá trị 0x0001 (Decimal 1)
+    r = _write(REG_COMMAND, 1) 
+    if not r.isError(): 
+        print("[FAN] SENT START COMMAND"); return True
     return False
 
 def stop_motor():
@@ -269,34 +273,32 @@ def read_hw_status():
     return None, None, None
 
 def run_fan(rpm):
-    """Bật quạt với tốc độ rpm — dùng chung cho mọi chế độ"""
     global fan_rpm, fan_running
     rpm = max(0.0, min(float(rpm), MAX_RPM))
 
+    # 1. Kết nối lại nếu cần
     if not modbus_ok:
-        print(f"[FAN] Modbus offline → thử reconnect")
         modbus_connect()
-        if not modbus_ok:
-            print(f"[FAN] ❌ Không bật được quạt: Modbus vẫn offline")
-            return False
 
     with fan_lock:
+        # 2. Ghi tần số trước
         ok_freq = set_speed_rpm(rpm)
-        if not ok_freq:
-            print(f"[FAN] ❌ Set tần số thất bại → hủy lệnh RUN")
-            return False
+        
+        # 3. Nghỉ một chút để biến tần xử lý dữ liệu tần số
+        time.sleep(0.3) 
 
-        time.sleep(0.5)          # Tăng từ 0.2 lên 0.5s
-
+        # 4. Gửi lệnh RUN
         ok_run = start_motor()
-        if not ok_run:
-            print(f"[FAN] ❌ Lệnh START thất bại")
-            return False
+        
+        # 5. Mẹo: Thử gửi lại lệnh RUN một lần nữa sau 200ms nếu vẫn chưa thấy chạy
+        time.sleep(0.2)
+        start_motor()
 
-        fan_rpm     = rpm
-        fan_running = True
-        print(f"[FAN] ✅ Chạy {rpm:.1f} RPM / {rpm_to_hz(rpm):.1f} Hz")
-    return True
+        if ok_run:
+            fan_rpm = rpm
+            fan_running = True
+            return True
+    return False
 
 def stop_fan():
     """Tắt quạt — dùng chung cho mọi chế độ"""
