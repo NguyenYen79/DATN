@@ -16,3 +16,19 @@ Lệnh check nhiệt độ: vcgencmd measure_temp
 - Commit changes:                   git commit -m "Describe what you changed"
 - Push to GitHub:                   git push origin main
 -Lệnh shut down pi : sudo shutdown -h now
+- chạy lại modbus: 
+# Bước 1 — Tìm process đang chiếm
+sudo fuser /dev/ttyACM0
+
+# Bước 2 — Kill sạch
+sudo fuser -k /dev/ttyACM0
+sudo killall python3
+sudo killall python
+
+# Bước 3 — Xác nhận trống
+sudo fuser /dev/ttyACM0
+# Phải không in ra gì
+
+# Bước 4 — Chạy lại
+python run1.py
+

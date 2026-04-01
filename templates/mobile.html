@@ -660,10 +660,10 @@
                     </div>
                 </div>
                 <!-- Messages -->
-                <div id="smart-start-msg" class="hidden items-center justify-center gap-2 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-xl mb-2 text-xs font-bold text-emerald-700">
+                <div id="smart-start-msg" style="display:none;" class="items-center justify-center gap-2 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-xl mb-2 text-xs font-bold text-emerald-700">
                     <i class="fas fa-check-circle text-emerald-500"></i> Đã bắt đầu chế độ SMART!
                 </div>
-                <div id="smart-cancel-msg" class="hidden items-center justify-center gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-xl mb-2 text-xs font-bold text-red-700">
+                <div id="smart-cancel-msg" style="display:none;" class="items-center justify-center gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-xl mb-2 text-xs font-bold text-red-700">
                     <i class="fas fa-times-circle text-red-500"></i> Đã hủy chế độ SMART!
                 </div>
                 <div class="flex gap-2 mb-3">
@@ -1489,16 +1489,25 @@ function stopPolling() { clearInterval(pollInterval); pollInterval = null; }
 
 // ── SMART ─────────────────────────────────────────────
 function startSmart() {
-    document.getElementById('smart-cancel-msg').classList.add('hidden');
-    document.getElementById('smart-start-msg').classList.remove('hidden');
-    document.getElementById('smart-start-msg').style.display = 'flex';
-    fetch('/smart/start', {method:'POST'}).catch(e => {});
+    updateFanStatusBar('turning_on');
+    const msgStart  = document.getElementById('smart-start-msg');
+    const msgCancel = document.getElementById('smart-cancel-msg');
+    msgCancel.style.display = 'none';
+    msgStart.style.display  = 'flex';   // ← hiện và giữ nguyên
+    fetch('/smart/start', { method:'POST' })
+        .then(() => { updateFanStatusBar('on'); })
+        .catch(e => {});
 }
+
 function cancelSmart() {
-    document.getElementById('smart-start-msg').classList.add('hidden');
-    document.getElementById('smart-cancel-msg').classList.remove('hidden');
-    document.getElementById('smart-cancel-msg').style.display = 'flex';
-    fetch('/smart/stop', {method:'POST'}).catch(e => {});
+    updateFanStatusBar('turning_off');
+    const msgStart  = document.getElementById('smart-start-msg');
+    const msgCancel = document.getElementById('smart-cancel-msg');
+    msgStart.style.display  = 'none';
+    msgCancel.style.display = 'flex';   // ← hiện và giữ nguyên
+    fetch('/smart/stop', { method:'POST' })
+        .then(() => { updateFanStatusBar('off'); })
+        .catch(e => {});
 }
 
 // ── ECO ───────────────────────────────────────────────
@@ -1559,6 +1568,12 @@ function startTimer() {
     const s = parseInt(document.getElementById('timer-s').value) || 0;
     const total = h * 3600 + m * 60 + s;
     if (total <= 0) { alert('Vui lòng nhập thời gian!'); return; }
+    // Bật timer_override — ECO sẽ không bật lại quạt khi timer tắt
+    fetch('/eco/timer_override', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({active: true})
+    });
     if (timerInterval) clearInterval(timerInterval);
     timerTotal = total; timerRemaining = total;
     setTimerBadge('running');
@@ -1585,6 +1600,12 @@ function startTimer() {
 }
 
 function cancelTimer() {
+    // Tắt timer_override — ECO hoạt động lại bình thường
+    fetch('/eco/timer_override', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({active: false})
+    });
     if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
     timerRemaining = 0; setTimerBadge('waiting');
     document.getElementById('timer-progress-wrap').style.display = 'none';
@@ -1694,6 +1715,9 @@ async function loadSettings() {
         document.getElementById('mid-rpm-slider').value  = data.mid_rpm;
         document.getElementById('high-rpm-slider').value = data.high_rpm;
         updateSettings();
+        // Cập nhật nhiệt độ hiện tại lên indicator
+        const curTemp = parseFloat(document.getElementById('settings-temp-val').innerText);
+        if (!isNaN(curTemp)) updateSettingsTemp(curTemp);
     } catch(e) {}
 }
 

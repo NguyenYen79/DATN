@@ -87,6 +87,7 @@ fan_rpm        = 0.0
 fan_running    = False
 fan_lock       = threading.Lock()
 modbus_lock    = threading.Lock()
+timer_override = False
 modbus_ok      = False
 client         = None
 
@@ -346,6 +347,9 @@ def eco_schedule_thread():
                 continue
             if smart_active:
                 continue
+            if timer_override:          # ← THÊM: nếu timer đang giữ quyền → bỏ qua
+                print(f"[ECO] Timer override đang active → bỏ qua lịch trình")
+                continue
 
             now   = datetime.now().strftime('%H:%M')
             start = eco_schedule['start']
@@ -415,11 +419,22 @@ def logout():
     session.clear()
     return redirect(url_for('login'))
 
+# Thêm vào run1.py
 @app.route('/')
 def index():
     if not session.get('logged_in'):
         return redirect(url_for('login'))
-    return render_template('index.html',
+    
+    # Detect thiết bị dựa vào User-Agent
+    user_agent = request.headers.get('User-Agent', '').lower()
+    is_mobile = any(device in user_agent for device in [
+        'android', 'iphone', 'ipad', 'ipod', 
+        'mobile', 'blackberry', 'windows phone'
+    ])
+    
+    template = 'mobile.html' if is_mobile else 'index.html'
+    
+    return render_template(template,
                            username=session.get('username'),
                            role=session.get('role', 'viewer'))
 
@@ -551,17 +566,32 @@ def fan_stop_route():
 def fan_status():
     if not session.get('logged_in'):
         return jsonify({'status': 'error'}), 401
-    
-    # Đọc trạng thái thực tế từ biến tần (nếu có kết nối)
+
     _, hw_hz, hw_rpm = read_hw_status()
-    
+
+    # Đọc nhiệt độ và tính level theo ngưỡng người dùng cài đặt
+    temp  = read_temperature()
+    level = 'Không có cảm biến'
+    if temp is not None:
+        low_max = TEMP_THRESHOLD[0][0]
+        mid_max = TEMP_THRESHOLD[1][0]
+        if   temp < low_max: level = 'Thấp'
+        elif temp < mid_max: level = 'Trung bình'
+        else:                level = 'Cao'
+
     return jsonify({
-        'rpm': fan_rpm,           # Giá trị RPM cuối cùng bạn set trên web
-        'hz': rpm_to_hz(fan_rpm),
-        'running': fan_running,
-        'hw_rpm': hw_rpm,         # Giá trị thực tế biến tần đang chạy (phản hồi ngược)
-        'modbus': modbus_ok,
-        'smart_active': smart_active
+        'rpm'         : fan_rpm,
+        'hz'          : rpm_to_hz(fan_rpm),
+        'running'     : fan_running,
+        'hw_hz'       : hw_hz,
+        'hw_rpm'      : hw_rpm,
+        'modbus'      : modbus_ok,
+        'smart_active': smart_active,
+        'ai_mode'     : smart_active,           # ← thêm
+        'people'      : people_count if smart_active else None,  # ← thêm
+        'temp'        : temp,                   # ← thêm
+        'temp_level'  : level,                  # ← thêm — dùng ngưỡng mới
+        'hailo'       : HAILO_AVAILABLE,        # ← thêm
     })
 
 @app.route('/modbus/reconnect', methods=['POST'])
@@ -579,9 +609,12 @@ def temperature():
     temp  = read_temperature()
     level = 'Không có cảm biến'
     if temp is not None:
-        if   temp < 28: level = 'Thấp'
-        elif temp < 35: level = 'Trung bình'
-        else:           level = 'Cao'
+        # Dùng ngưỡng người dùng đã cài đặt thay vì cứng
+        low_max = TEMP_THRESHOLD[0][0]
+        mid_max = TEMP_THRESHOLD[1][0]
+        if   temp < low_max: level = 'Thấp'
+        elif temp < mid_max: level = 'Trung bình'
+        else:                level = 'Cao'
     return jsonify({'temp': temp, 'level': level})
 
 # ====================================================================
@@ -684,14 +717,27 @@ def settings_temp_threshold_get():
         'mid_rpm' : TEMP_THRESHOLD[1][1],
         'high_rpm': TEMP_THRESHOLD[2][1],
     })
-
+# ====================================================================
+# ROUTE — API
+# ====================================================================
+@app.route('/eco/timer_override', methods=['POST'])
+def eco_timer_override():
+    global timer_override
+    if not session.get('logged_in'):
+        return jsonify({'status': 'error'}), 401
+    data = request.get_json()
+    timer_override = bool(data.get('active', False))
+    print(f"[TIMER] Override: {timer_override}")
+    return jsonify({'status': 'ok', 'timer_override': timer_override})
 # ====================================================================
 # KHỞI ĐỘNG
 # ====================================================================
 if __name__ == '__main__':
+    # Kill cổng web
     os.system("fuser -k 5000/tcp 2>/dev/null || true")
-    time.sleep(0.5)
-
+    # Kill cổng serial trước khi connect
+    os.system("fuser -k /dev/ttyACM0 2>/dev/null || true")
+    time.sleep(1)  # Tăng từ 0.5 lên 1s cho chắc
     print("[STARTUP] Đang kết nối Modbus...")
     if modbus_connect():
         print("[STARTUP] ✅ Modbus sẵn sàng — quạt có thể điều khiển")
