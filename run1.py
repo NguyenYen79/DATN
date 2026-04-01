@@ -25,6 +25,31 @@ except ImportError as e:
     print(f"[HAILO] ❌ Không tìm thấy hailo_platform: {e} — sẽ dùng CPU fallback")
 
 # ====================================================================
+# YOLO CPU FALLBACK
+# ====================================================================
+try:
+    from ultralytics import YOLO
+    yolo_cpu_model    = YOLO('yolov8n.pt')
+    YOLO_CPU_AVAILABLE = True
+    print("[YOLO-CPU] ✅ Load thành công")
+except Exception as e:
+    YOLO_CPU_AVAILABLE = False
+    yolo_cpu_model    = None
+    print(f"[YOLO-CPU] ❌ {e}")
+
+# ====================================================================
+# YOLO CPU FALLBACK — dùng khi Hailo không khả dụng
+# ====================================================================
+try:
+    from ultralytics import YOLO
+    yolo_cpu_model = YOLO('yolov8n.pt')  # Model nhỏ nhất, chạy trên CPU
+    YOLO_CPU_AVAILABLE = True
+    print("[YOLO-CPU] ✅ Model CPU load thành công")
+except Exception as e:
+    YOLO_CPU_AVAILABLE = False
+    print(f"[YOLO-CPU] ❌ Không load được: {e}")
+
+# ====================================================================
 # MODBUS — import có bảo vệ
 # ====================================================================
 try:
@@ -115,6 +140,38 @@ def read_temperature():
 # ====================================================================
 # HAILO MODEL CLASS
 # ====================================================================
+def _draw_detections(frame, detections):
+    for (x1, y1, x2, y2, conf) in detections:
+        cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 100), 2)
+        cv2.putText(frame, f"Person {conf:.2f}",
+                    (x1, y1-8), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 100), 2)
+
+def detect_people_cpu(frame):
+    """Dùng YOLO CPU để detect người — fallback khi không có Hailo"""
+    if not YOLO_CPU_AVAILABLE:
+        return []
+    try:
+        results = yolo_cpu_model(frame, classes=[0], conf=0.45, verbose=False)
+        detections = []
+        for r in results:
+            for box in r.boxes:
+                x1, y1, x2, y2 = map(int, box.xyxy[0])
+                conf = float(box.conf[0])
+                detections.append((x1, y1, x2, y2, conf))
+        return detections
+    except Exception as e:
+        print(f"[YOLO-CPU] Lỗi detect: {e}")
+        return []
+        for r in results:
+            for box in r.boxes:
+                x1, y1, x2, y2 = map(int, box.xyxy[0])
+                conf = float(box.conf[0])
+                detections.append((x1, y1, x2, y2, conf))
+        return detections
+    except Exception as e:
+        print(f"[YOLO-CPU] Lỗi detect: {e}")
+        return []
+
 class HailoYOLO:
     def __init__(self, hef_path: str):
         self.hef     = HEF(hef_path)
@@ -323,14 +380,25 @@ def smart_fan_thread():
         if temp is None:
             continue
 
-        rpm = 33.0
+        # RPM theo nhiệt độ
+        rpm_by_temp = 33.0
         for thr, r in TEMP_THRESHOLD:
             if temp <= thr:
-                rpm = r
+                rpm_by_temp = r
                 break
 
+        # RPM theo số người — chỉ tính khi có camera detect
+        rpm_by_people = 0.0
+        if YOLO_CPU_AVAILABLE or HAILO_AVAILABLE:
+            if   people_count >= 10: rpm_by_people = 100.0
+            elif people_count >= 6:  rpm_by_people = 66.0
+            elif people_count >= 1:  rpm_by_people = 33.0
+
+        # Lấy giá trị cao hơn
+        rpm = max(rpm_by_temp, rpm_by_people)
+
         if rpm != _last_smart_rpm:
-            print(f"[SMART] {temp}°C → {rpm} RPM")
+            print(f"[SMART] {temp}°C | {people_count} người → {rpm} RPM")
             run_fan(rpm)
             _last_smart_rpm = rpm
 
@@ -386,17 +454,53 @@ except Exception as e:
     tapo_cam = None
 
 def generate_frames():
-    cap = cv2.VideoCapture(RTSP_URL)
-    while True:
-        success, frame = cap.read()
-        if not success:
-            break
-        else:
-            ret, buffer = cv2.imencode('.jpg', frame)
-            frame = buffer.tobytes()
-            yield (b'--frame\r\n'
-                   b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+    global people_count
+    camera = cv2.VideoCapture(RTSP_URL)
+    camera.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
+    if HAILO_AVAILABLE and hailo_model is not None:
+        print("[STREAM] Mở Hailo pipeline...")
+        with InferVStreams(hailo_model.network_group,
+                          hailo_model.in_params,
+                          hailo_model.out_params) as pipeline:
+            with hailo_model.network_group.activate(hailo_model.ng_params):
+                print("[STREAM] Hailo pipeline READY")
+                while True:
+                    ok, frame = camera.read()
+                    if not ok: break
+                    if smart_active:
+                        try:
+                            dets = hailo_model.infer(pipeline, frame)
+                            people_count = len(dets)
+                            _draw_detections(frame, dets)
+                        except Exception as e:
+                            print(f"[HAILO INFER] Lỗi: {e}")
+                    _overlay_text(frame)
+                    yield _encode(frame)
+    else:
+        print("[STREAM] Hailo không khả dụng — chạy YOLO CPU fallback")
+        while True:
+            ok, frame = camera.read()
+            if not ok: break
+            if smart_active and YOLO_CPU_AVAILABLE:
+                try:
+                    dets = detect_people_cpu(frame)
+                    people_count = len(dets)
+                    _draw_detections(frame, dets)
+                except Exception as e:
+                    print(f"[YOLO-CPU] Lỗi frame: {e}")
+            _overlay_text(frame)
+            yield _encode(frame)
+
+def _overlay_text(frame):
+    if smart_active:
+        cv2.putText(frame,
+            f"People: {people_count}  |  Fan: {fan_rpm:.0f} RPM / {rpm_to_hz(fan_rpm):.1f} Hz",
+            (10, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 255, 100), 2)
+
+def _encode(frame):
+    _, buf = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 95])
+    return b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + buf.tobytes() + b'\r\n'
 # ====================================================================
 # ROUTES — XÁC THỰC
 # ====================================================================
