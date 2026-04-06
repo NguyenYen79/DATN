@@ -9,7 +9,8 @@ import os
 from datetime import datetime
 import subprocess
 from pytapo import Tapo
-
+import struct
+import serial
 # ====================================================================
 # HAILO-8L — import có bảo vệ
 # ====================================================================
@@ -95,6 +96,73 @@ REG_FREQUENCY = 0x01
 REG_COMMAND   = 0x02
 REG_STATUS    = 0x1000
 REG_RUN_FREQ  = 0x1003
+
+# ====================================================================
+# CẤU HÌNH ĐỒNG HỒ ĐIỆN (Modbus RTU - FC03)
+# ====================================================================
+POWER_METER_PORT     = '/dev/ttyUSB0'
+POWER_METER_SLAVE_ID = 2
+POWER_METER_BAUDRATE = 9600
+POWER_METER_PARITY   = 'E'
+
+POWER_REGISTERS = {
+    'current'        : 0x0BB8,
+    'voltage'        : 0x0BD4,
+    'active_power'   : 0x0BEE,
+    'reactive_power' : 0x0BFC,
+    'apparent_power' : 0x0C04,
+    'power_factor'   : 0x0C0C,
+    'frequency'      : 0x0C26,
+}
+
+power_meter_client = None
+power_meter_lock   = threading.Lock()
+
+def power_meter_connect():
+    global power_meter_client
+    try:
+        power_meter_client = serial.Serial(
+            port=POWER_METER_PORT, baudrate=POWER_METER_BAUDRATE,
+            parity=POWER_METER_PARITY, stopbits=1, bytesize=8, timeout=3,
+        )
+        print(f"[POWER METER] ✅ Kết nối thành công: {POWER_METER_PORT}")
+        return True
+    except Exception as e:
+        print(f"[POWER METER] ❌ Lỗi kết nối: {e}")
+        power_meter_client = None
+        return False
+
+def _pm_crc(data):
+    crc = 0xFFFF
+    for byte in data:
+        crc ^= byte
+        for _ in range(8):
+            crc = (crc >> 1) ^ 0xA001 if crc & 1 else crc >> 1
+    return crc.to_bytes(2, 'little')
+
+def read_power_register(address):
+    global power_meter_client
+    if power_meter_client is None or not power_meter_client.is_open:
+        power_meter_connect()
+    if power_meter_client is None:
+        return None
+    try:
+        with power_meter_lock:
+            frame   = bytes([POWER_METER_SLAVE_ID, 0x03]) + address.to_bytes(2, 'big') + (2).to_bytes(2, 'big')
+            request = frame + _pm_crc(frame)
+            power_meter_client.reset_input_buffer()
+            power_meter_client.write(request)
+            time.sleep(0.1)
+            response = power_meter_client.read(9)
+        if len(response) < 9 or _pm_crc(response[:-2]) != response[-2:]:
+            return None
+        return round(struct.unpack('>f', response[3:7])[0], 3)
+    except Exception as e:
+        print(f"[POWER METER] Lỗi đọc 0x{address:04X}: {e}")
+        return None
+
+def read_all_power():
+    return {key: read_power_register(addr) for key, addr in POWER_REGISTERS.items()}
 
 # ── SMART MODE: ngưỡng NHIỆT ĐỘ → mức tốc độ ────────────────────────
 TEMP_THRESHOLD_DEFAULT = [
@@ -833,6 +901,16 @@ def eco_timer_override():
     timer_override = bool(data.get('active', False))
     print(f"[TIMER] Override: {timer_override}")
     return jsonify({'status': 'ok', 'timer_override': timer_override})
+
+# ====================================================================
+# ROUTE — ĐỒNG HỒ ĐIỆN
+# ====================================================================
+@app.route('/power_meter')
+def power_meter():
+    if not session.get('logged_in'):
+        return jsonify({'status': 'error'}), 401
+    data = read_all_power()
+    return jsonify({'status': 'ok', **data})
 # ====================================================================
 # KHỞI ĐỘNG
 # ====================================================================
@@ -841,7 +919,9 @@ if __name__ == '__main__':
     os.system("fuser -k 5000/tcp 2>/dev/null || true")
     # Kill cổng serial trước khi connect
     os.system("fuser -k /dev/ttyACM0 2>/dev/null || true")
-    time.sleep(1)  # Tăng từ 0.5 lên 1s cho chắc
+    time.sleep(1)  
+    print("[STARTUP] Đang kết nối đồng hồ điện...")
+    power_meter_connect()
     print("[STARTUP] Đang kết nối Modbus...")
     if modbus_connect():
         print("[STARTUP] ✅ Modbus sẵn sàng — quạt có thể điều khiển")

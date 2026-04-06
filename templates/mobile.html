@@ -1130,6 +1130,43 @@
 
         <div class="card p-4">
             <h4 class="font-black text-slate-700 mb-3 flex items-center gap-2 text-sm">
+                <i class="fas fa-plug text-yellow-500"></i> Thông số điện năng
+                <span id="pm-status" class="ml-auto text-xs font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-400">Đang tải...</span>
+            </h4>
+            <div class="grid grid-cols-2 gap-2">
+                <div class="report-card flex-col gap-1">
+                    <p class="text-xs font-bold text-slate-500">ĐIỆN ÁP</p>
+                    <p class="text-base font-black text-slate-800"><span id="pm-voltage">—</span> <span class="text-xs font-medium text-slate-400">V</span></p>
+                </div>
+                <div class="report-card flex-col gap-1">
+                    <p class="text-xs font-bold text-slate-500">DÒNG ĐIỆN</p>
+                    <p class="text-base font-black text-slate-800"><span id="pm-current">—</span> <span class="text-xs font-medium text-slate-400">A</span></p>
+                </div>
+                <div class="report-card flex-col gap-1">
+                    <p class="text-xs font-bold text-slate-500">CS TÁC DỤNG</p>
+                    <p class="text-base font-black text-slate-800"><span id="pm-active">—</span> <span class="text-xs font-medium text-slate-400">kW</span></p>
+                </div>
+                <div class="report-card flex-col gap-1">
+                    <p class="text-xs font-bold text-slate-500">CS PHẢN KHÁNG</p>
+                    <p class="text-base font-black text-slate-800"><span id="pm-reactive">—</span> <span class="text-xs font-medium text-slate-400">kVAr</span></p>
+                </div>
+                <div class="report-card flex-col gap-1">
+                    <p class="text-xs font-bold text-slate-500">CS BIỂU KIẾN</p>
+                    <p class="text-base font-black text-slate-800"><span id="pm-apparent">—</span> <span class="text-xs font-medium text-slate-400">kVA</span></p>
+                </div>
+                <div class="report-card flex-col gap-1">
+                    <p class="text-xs font-bold text-slate-500">HỆ SỐ CS</p>
+                    <p class="text-base font-black text-slate-800"><span id="pm-pf">—</span> <span class="text-xs font-medium text-slate-400">cosφ</span></p>
+                </div>
+                <div class="report-card col-span-2 flex-col gap-1">
+                    <p class="text-xs font-bold text-slate-500">TẦN SỐ</p>
+                    <p class="text-base font-black text-slate-800"><span id="pm-freq">—</span> <span class="text-xs font-medium text-slate-400">Hz</span></p>
+                </div>
+            </div>
+        </div>
+
+        <div class="card p-4">
+            <h4 class="font-black text-slate-700 mb-3 flex items-center gap-2 text-sm">
                 <i class="fas fa-chart-line text-emerald-500"></i> Nhiệt độ & Tốc độ quạt
             </h4>
             <canvas id="report-chart" height="160"></canvas>
@@ -1473,6 +1510,33 @@ setInterval(async () => {
         }
     } catch(e) {}
 }, 5000);
+
+// ── POLL ĐỒNG HỒ ĐIỆN ────────────────────────────────
+    function updatePowerMeter() {
+        fetch('/power_meter')
+            .then(r => r.json())
+            .then(d => {
+                if (d.status !== 'ok') return;
+                const set = (id, val) => {
+                    const el = document.getElementById(id);
+                    if (el) el.innerText = val !== null ? parseFloat(val).toFixed(3) : '—';
+                };
+                set('pm-voltage',  d.voltage);
+                set('pm-current',  d.current);
+                set('pm-active',   d.active_power);
+                set('pm-reactive', d.reactive_power);
+                set('pm-apparent', d.apparent_power);
+                set('pm-pf',       d.power_factor);
+                set('pm-freq',     d.frequency);
+                const badge = document.getElementById('pm-status');
+                if (badge) { badge.innerText = 'Online'; badge.className = 'ml-auto text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100'; }
+            })
+            .catch(() => {
+                const badge = document.getElementById('pm-status');
+                if (badge) { badge.innerText = 'Offline'; badge.className = 'ml-auto text-xs font-bold px-2 py-0.5 rounded-full bg-red-50 text-red-500 border border-red-100'; }
+            });
+    }
+    setInterval(updatePowerMeter, 5000);
 
 // ── POLL SỐ NGƯỜI ─────────────────────────────────────
 let pollInterval = null;
