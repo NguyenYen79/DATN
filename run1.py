@@ -183,6 +183,9 @@ modbus_lock    = threading.Lock()
 timer_override = False
 modbus_ok      = False
 client         = None
+# ================== DATA LOGGER ==================
+history_data = []
+energy_kwh   = 0.0
 
 # ── TRẠNG THÁI CHẾ ĐỘ ───────────────────────────────────────────────
 current_mode   = 'Manual'   # 'Manual' | 'Eco' | 'Smart'
@@ -291,8 +294,11 @@ if HAILO_AVAILABLE:
         HAILO_AVAILABLE = False
 
 # ====================================================================
-# MODBUS HELPERS
+# MODBUS HELPERS — SỬA XUNG ĐỘT BUS
 # ====================================================================
+modbus_lock = threading.Lock()
+last_modbus_time = 0
+
 def modbus_connect(retries=3):
     global client, modbus_ok
     if not PYMODBUS_AVAILABLE:
@@ -303,54 +309,79 @@ def modbus_connect(retries=3):
             if client:
                 try: client.close()
                 except: pass
+                client = None
+            time.sleep(0.5)  # ← chờ bus ổn định sau khi close
+
             client = ModbusSerialClient(
                 port=MODBUS_PORT, baudrate=BAUDRATE,
-                bytesize=8, parity='N', stopbits=1, timeout=1,
+                bytesize=8, parity='N', stopbits=1,
+                timeout=2,          # ← tăng từ 1 lên 2
+                retry_on_empty=True,
+                retries=2,
             )
             if client.connect():
                 modbus_ok = True
+                time.sleep(0.3)  # ← chờ biến tần sẵn sàng sau khi connect
                 print(f"[MODBUS] ✅ Kết nối thành công: {MODBUS_PORT}")
                 return True
             else:
-                print(f"[MODBUS] ❌ client.connect() False (lần {attempt+1})")
+                print(f"[MODBUS] ❌ connect() False (lần {attempt+1})")
         except Exception as e:
             print(f"[MODBUS] ❌ Lỗi lần {attempt+1}: {e}")
         time.sleep(1)
     modbus_ok = False
-    print(f"[MODBUS] ❌ Thất bại sau {retries} lần thử — kiểm tra dây GND và tham số F2-xx")
     return False
 
 class _Err:
     def isError(self): return True
 
 def _write(reg, val):
-    global modbus_ok
+    global modbus_ok, last_modbus_time
     with modbus_lock:
-        if client is None:
-            print(f"[MODBUS] _write(0x{reg:04X}) bị block: client=None")
-            return _Err()
-        if not modbus_ok:
-            print(f"[MODBUS] _write(0x{reg:04X}) modbus_ok=False → thử reconnect")
+        # Reconnect nếu cần — bên trong lock để tránh nhiều thread reconnect cùng lúc
+        if client is None or not modbus_ok:
+            print(f"[MODBUS] _write(0x{reg:04X}) → reconnect...")
             modbus_connect()
             if not modbus_ok:
                 return _Err()
+
+        # Chống spam — đảm bảo tối thiểu 200ms giữa các lệnh
+        now = time.time()
+        gap = now - last_modbus_time
+        if gap < 0.2:
+            time.sleep(0.2 - gap)
+        last_modbus_time = time.time()
+
         try:
             result = client.write_register(reg, val, device_id=SLAVE_ID)
             if result.isError():
-                print(f"[MODBUS] _write(0x{reg:04X}, {val}) LỖI: {result}")
+                print(f"[MODBUS] ❌ _write(0x{reg:04X}, {val}) LỖI: {result}")
                 modbus_ok = False
+            else:
+                print(f"[MODBUS] ✅ _write(0x{reg:04X}, {val}) OK")
             return result
         except Exception as e:
-            print(f"[MODBUS] _write() exception: {e}")
+            print(f"[MODBUS] ❌ _write() exception: {e}")
             modbus_ok = False
             return _Err()
 
 def _read(reg, count=1):
+    global modbus_ok, last_modbus_time  # ← thêm last_modbus_time
     with modbus_lock:
-        if not modbus_ok or client is None: return _Err()
-        try:    return client.read_holding_registers(reg, count=count, device_id=SLAVE_ID)
-        except: return _Err()
-
+        if client is None or not modbus_ok:
+            return _Err()
+        now = time.time()
+        gap = now - last_modbus_time
+        if gap < 0.2:
+            time.sleep(0.2 - gap)
+        try:
+            res = client.read_holding_registers(reg, count=count, device_id=SLAVE_ID)
+            last_modbus_time = time.time()
+            return res
+        except Exception as e:
+            print(f"[MODBUS] ❌ _read() exception: {e}")
+            modbus_ok = False
+            return _Err()
 # ====================================================================
 # QUY ĐỔI RPM ↔ HZ
 # ====================================================================
@@ -401,30 +432,19 @@ def run_fan(rpm):
     global fan_rpm, fan_running
     rpm = max(0.0, min(float(rpm), MAX_RPM))
 
-    # 1. Kết nối lại nếu cần
-    if not modbus_ok:
-        modbus_connect()
-
     with fan_lock:
-        # 2. Ghi tần số trước
         ok_freq = set_speed_rpm(rpm)
-        
-        # 3. Nghỉ một chút để biến tần xử lý dữ liệu tần số
-        time.sleep(0.3) 
-
-        # 4. Gửi lệnh RUN
+        time.sleep(0.3)
         ok_run = start_motor()
-        
-        # 5. Mẹo: Thử gửi lại lệnh RUN một lần nữa sau 200ms nếu vẫn chưa thấy chạy
-        time.sleep(0.2)
-        start_motor()
+        # ← BỎ lệnh start_motor() lần 2
 
-        if ok_run:
-            fan_rpm = rpm
+        if ok_freq and ok_run:
+            fan_rpm     = rpm
             fan_running = True
             return True
-    return False
 
+        # Nếu thất bại, fan_running vẫn = False → eco thread sẽ thử lại
+        return False
 def stop_fan():
     """Tắt quạt — dùng chung cho mọi chế độ"""
     global fan_rpm, fan_running
@@ -477,38 +497,91 @@ threading.Thread(target=smart_fan_thread, daemon=True).start()
 # ====================================================================
 def eco_schedule_thread():
     while True:
-        time.sleep(10)
+        time.sleep(5)
         try:
+            # Log trạng thái mỗi lần check
+            print(f"[ECO-DEBUG] mode={current_mode} | eco_schedule={eco_schedule} | "
+                  f"smart_active={smart_active} | fan_running={fan_running} | "
+                  f"timer_override={timer_override}")
+
             if eco_schedule is None or current_mode != 'Eco':
                 continue
             if smart_active:
                 continue
-            if timer_override:          # ← THÊM: nếu timer đang giữ quyền → bỏ qua
-                print(f"[ECO] Timer override đang active → bỏ qua lịch trình")
+            if timer_override:
                 continue
 
-            now   = datetime.now().strftime('%H:%M')
-            start = eco_schedule['start']
-            stop  = eco_schedule['stop']
-            rpm   = eco_schedule.get('rpm', 33)
+            now_dt  = datetime.now()
+            now_min = now_dt.hour * 60 + now_dt.minute
 
-            if start <= now < stop:
-                if not fan_running:
-                    print(f"[ECO] {now} trong lịch → BẬT quạt {rpm} RPM")
-                    run_fan(rpm)
+            sh, sm = map(int, eco_schedule['start'].split(':'))
+            eh, em = map(int, eco_schedule['stop'].split(':'))
+            start_min = sh * 60 + sm
+            stop_min  = eh * 60 + em
+            rpm       = eco_schedule.get('rpm', 33)
+
+            in_schedule = start_min <= now_min < stop_min
+
+            print(f"[ECO-DEBUG] now={now_min}ph | start={start_min}ph | "
+                  f"stop={stop_min}ph | in_schedule={in_schedule}")
+
+            if in_schedule and not fan_running:
+                print(f"[ECO] → BẬT quạt {rpm} RPM")
+                run_fan(rpm)
+            elif not in_schedule and fan_running:
+                print(f"[ECO] → TẮT quạt")
+                stop_fan()
             else:
-                if fan_running:
-                    print(f"[ECO] {now} ngoài lịch → TẮT quạt")
-                    stop_fan()
+                print(f"[ECO-DEBUG] Không làm gì — "
+                      f"in_schedule={in_schedule}, fan_running={fan_running}")
+
         except Exception as e:
             print(f"[ECO] Lỗi thread: {e}")
 
 threading.Thread(target=eco_schedule_thread, daemon=True).start()
 
 # ====================================================================
-# PTZ
+# DATA LOGGER THREAD
 # ====================================================================
+def data_logger_thread():
+    global history_data, energy_kwh
 
+    while True:
+        try:
+            status, hz, rpm = read_hw_status()
+            temp = read_temperature()
+
+            # đọc công suất từ công tơ (bạn đã có sẵn)
+            power_data = read_all_power()
+            power = power_data.get("active_power") if power_data else None
+
+            if hz is not None:
+                data_point = {
+                    "time": datetime.now().strftime("%H:%M:%S"),
+                    "rpm": rpm,
+                    "hz": hz,
+                    "temp": temp,
+                    "power": power,
+                    "running": fan_running
+                }
+
+                history_data.append(data_point)
+
+                # Giới hạn bộ nhớ
+                if len(history_data) > 1000:
+                    history_data.pop(0)
+
+                # TÍNH kWh (tích phân công suất)
+                if power:
+                    energy_kwh += power * (2/3600)  # 2 giây
+
+        except Exception as e:
+            print("[LOGGER] Lỗi:", e)
+
+        time.sleep(2)
+
+# chạy thread
+threading.Thread(target=data_logger_thread, daemon=True).start()
 
 # ====================================================================
 # GENERATE FRAMES
@@ -824,18 +897,32 @@ def eco_save():
     stop    = to_24h(data['stop_h'],  data['stop_m'],  data['stop_ap'])
     eco_rpm = int(data.get('rpm', 33))
     eco_schedule = {'start': start, 'stop': stop, 'rpm': eco_rpm}
-    print(f"[ECO] Lịch trình: BẬT {start} — TẮT {stop} | {eco_rpm} RPM")
+    print(f"[ECO] Lịch trình đã lưu: BẬT {start} — TẮT {stop} | {eco_rpm} RPM")
 
-    # Kiểm tra ngay lập tức
-    now = datetime.now().strftime('%H:%M')
-    if start <= now < stop:
-        print(f"[ECO] {now} đang trong lịch → BẬT quạt ngay")
+    # Xử lý ngay khi lưu — không chờ thread
+    now_dt  = datetime.now()
+    now_min = now_dt.hour * 60 + now_dt.minute
+    sh, sm  = map(int, start.split(':'))
+    eh, em  = map(int, stop.split(':'))
+    start_min = sh * 60 + sm
+    stop_min  = eh * 60 + em
+
+    in_schedule = start_min <= now_min < stop_min
+
+    if in_schedule:
+        print(f"[ECO] Đang trong khung giờ → BẬT quạt {eco_rpm} RPM")
         run_fan(eco_rpm)
     else:
-        print(f"[ECO] {now} ngoài lịch → TẮT quạt")
+        print(f"[ECO] Ngoài khung giờ → TẮT quạt")
         stop_fan()
 
-    return jsonify({'status': 'ok', 'start': start, 'stop': stop})
+    return jsonify({
+        'status'     : 'ok',
+        'start'      : start,
+        'stop'       : stop,
+        'in_schedule': in_schedule,
+        'fan_running': fan_running
+    })
 
 @app.route('/eco/cancel', methods=['POST'])
 def eco_cancel():
@@ -911,6 +998,48 @@ def power_meter():
         return jsonify({'status': 'error'}), 401
     data = read_all_power()
     return jsonify({'status': 'ok', **data})
+
+@app.route('/history')
+def get_history():
+    if not session.get('logged_in'):
+        return jsonify({'status': 'error'}), 401
+    return jsonify(history_data)
+
+@app.route('/report')
+def report():
+    if not session.get('logged_in'):
+        return jsonify({'status': 'error'}), 401
+
+    if len(history_data) == 0:
+        return jsonify({})
+
+    total_time = 0
+    total_temp = 0
+    count = 0
+    ai_changes = 0
+    last_rpm = None
+
+    for d in history_data:
+        if d["running"]:
+            total_time += 2
+
+        if d["temp"] is not None:
+            total_temp += d["temp"]
+            count += 1
+
+        if last_rpm is not None and d["rpm"] != last_rpm:
+            ai_changes += 1
+
+        last_rpm = d["rpm"]
+
+    avg_temp = total_temp / count if count else 0
+
+    return jsonify({
+        "total_runtime": total_time,
+        "avg_temp": round(avg_temp, 1),
+        "ai_adjustments": ai_changes,
+        "total_energy": round(energy_kwh, 3)
+    })
 # ====================================================================
 # KHỞI ĐỘNG
 # ====================================================================

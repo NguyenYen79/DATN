@@ -8,6 +8,7 @@ import numpy as np
 import os
 from datetime import datetime
 import subprocess
+from pytapo import Tapo
 
 # ====================================================================
 # HAILO-8L — import có bảo vệ
@@ -49,15 +50,13 @@ USERS = {
 }
 
 # ====================================================================
-# CẤU HÌNH CAMERA EZVIZ
+# CẤU HÌNH CAMERA Tapo
 # ====================================================================
-RTSP_URL     = "rtsp://raspberrypi:Admin@123@192.168.50.112:554/stream2"
-ACCESS_TOKEN = "at.7sgmy75zcd8biv471ofbq0tzciu91xzt-3624rt6whm-12zfhhw-mvo2c6vza"
-DEVICE_SN    = "J83082531"
-CHANNEL      = 1
-BASE_URL     = "https://isgpopen.ezvizlife.com"
-DIR_MAP      = {"UP": 0, "DOWN": 1, "LEFT": 2, "RIGHT": 3}
+CAM_IP = '192.168.50.112'  # Nhớ thay bằng IP thật
+CAM_USER = 'raspberrypi'
+CAM_PASS = 'Admin@123'
 
+RTSP_URL = f'rtsp://{CAM_USER}:{CAM_PASS}@{CAM_IP}:554/stream1'
 # ====================================================================
 # CẤU HÌNH BIẾN TẦN
 # ====================================================================
@@ -88,6 +87,7 @@ fan_rpm        = 0.0
 fan_running    = False
 fan_lock       = threading.Lock()
 modbus_lock    = threading.Lock()
+timer_override = False
 modbus_ok      = False
 client         = None
 
@@ -251,8 +251,12 @@ def set_speed_rpm(rpm):
     return False
 
 def start_motor():
-    r = _write(REG_COMMAND, 1)
-    if not r.isError(): print("[FAN] START"); return True
+    # Thử gửi lại lệnh RUN nhiều lần hoặc kiểm tra giá trị chính xác
+    # Đối với 1 số biến tần, giá trị 1 là RUN, 6 là STOP. 
+    # Nhưng hãy thử giá trị 0x0001 (Decimal 1)
+    r = _write(REG_COMMAND, 1) 
+    if not r.isError(): 
+        print("[FAN] SENT START COMMAND"); return True
     return False
 
 def stop_motor():
@@ -269,34 +273,32 @@ def read_hw_status():
     return None, None, None
 
 def run_fan(rpm):
-    """Bật quạt với tốc độ rpm — dùng chung cho mọi chế độ"""
     global fan_rpm, fan_running
     rpm = max(0.0, min(float(rpm), MAX_RPM))
 
+    # 1. Kết nối lại nếu cần
     if not modbus_ok:
-        print(f"[FAN] Modbus offline → thử reconnect")
         modbus_connect()
-        if not modbus_ok:
-            print(f"[FAN] ❌ Không bật được quạt: Modbus vẫn offline")
-            return False
 
     with fan_lock:
+        # 2. Ghi tần số trước
         ok_freq = set_speed_rpm(rpm)
-        if not ok_freq:
-            print(f"[FAN] ❌ Set tần số thất bại → hủy lệnh RUN")
-            return False
+        
+        # 3. Nghỉ một chút để biến tần xử lý dữ liệu tần số
+        time.sleep(0.3) 
 
-        time.sleep(0.5)          # Tăng từ 0.2 lên 0.5s
-
+        # 4. Gửi lệnh RUN
         ok_run = start_motor()
-        if not ok_run:
-            print(f"[FAN] ❌ Lệnh START thất bại")
-            return False
+        
+        # 5. Mẹo: Thử gửi lại lệnh RUN một lần nữa sau 200ms nếu vẫn chưa thấy chạy
+        time.sleep(0.2)
+        start_motor()
 
-        fan_rpm     = rpm
-        fan_running = True
-        print(f"[FAN] ✅ Chạy {rpm:.1f} RPM / {rpm_to_hz(rpm):.1f} Hz")
-    return True
+        if ok_run:
+            fan_rpm = rpm
+            fan_running = True
+            return True
+    return False
 
 def stop_fan():
     """Tắt quạt — dùng chung cho mọi chế độ"""
@@ -345,6 +347,9 @@ def eco_schedule_thread():
                 continue
             if smart_active:
                 continue
+            if timer_override:          # ← THÊM: nếu timer đang giữ quyền → bỏ qua
+                print(f"[ECO] Timer override đang active → bỏ qua lịch trình")
+                continue
 
             now   = datetime.now().strftime('%H:%M')
             start = eco_schedule['start']
@@ -367,70 +372,30 @@ threading.Thread(target=eco_schedule_thread, daemon=True).start()
 # ====================================================================
 # PTZ
 # ====================================================================
-def move_c6n(direction, duration=0):
-    try:
-        if direction == "STOP":
-            for d in [0, 1, 2, 3]:
-                requests.post(f"{BASE_URL}/api/lapp/device/ptz/stop",
-                    data={"accessToken": ACCESS_TOKEN, "deviceSerial": DEVICE_SN,
-                          "channelNo": CHANNEL, "direction": d}, timeout=3)
-        else:
-            requests.post(f"{BASE_URL}/api/lapp/device/ptz/start",
-                data={"accessToken": ACCESS_TOKEN, "deviceSerial": DEVICE_SN,
-                      "channelNo": CHANNEL, "direction": DIR_MAP[direction], "speed": 2}, timeout=3)
-            if duration > 0:
-                time.sleep(duration)
-                move_c6n("STOP")
-    except Exception as e:
-        print(f"[PTZ ERROR] {e}")
+
 
 # ====================================================================
 # GENERATE FRAMES
 # ====================================================================
-def _draw_detections(frame, detections):
-    for (x1, y1, x2, y2, conf) in detections:
-        cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 100), 2)
-        cv2.putText(frame, f"Person {conf:.2f}",
-                    (x1, y1-8), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 100), 2)
+# Khởi tạo kết nối PTZ
+try:
+    tapo_cam = Tapo(CAM_IP, CAM_USER, CAM_PASS)
+    print("\n[HỆ THỐNG] Đã kết nối thành công với Motor PTZ!\n")
+except Exception as e:
+    print(f"\n[LỖI] Không kết nối được PTZ: {e}\n")
+    tapo_cam = None
 
 def generate_frames():
-    global people_count
-    camera = cv2.VideoCapture(RTSP_URL)
-    camera.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-
-    if HAILO_AVAILABLE and hailo_model is not None:
-        with InferVStreams(hailo_model.network_group,
-                          hailo_model.in_params, hailo_model.out_params) as pipeline:
-            with hailo_model.network_group.activate(hailo_model.ng_params):
-                while True:
-                    ok, frame = camera.read()
-                    if not ok: break
-                    if smart_active:
-                        try:
-                            dets = hailo_model.infer(pipeline, frame)
-                            people_count = len(dets)
-                            _draw_detections(frame, dets)
-                        except Exception as e:
-                            print(f"[HAILO INFER] Lỗi: {e}")
-                    _overlay_text(frame)
-                    yield _encode(frame)
-    else:
-        print("[STREAM] Hailo không khả dụng — chạy fallback")
-        while True:
-            ok, frame = camera.read()
-            if not ok: break
-            _overlay_text(frame)
-            yield _encode(frame)
-
-def _overlay_text(frame):
-    if smart_active:
-        cv2.putText(frame,
-            f"People: {people_count}  |  Fan: {fan_rpm:.0f} RPM / {rpm_to_hz(fan_rpm):.1f} Hz",
-            (10, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 255, 100), 2)
-
-def _encode(frame):
-    _, buf = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 95])
-    return b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + buf.tobytes() + b'\r\n'
+    cap = cv2.VideoCapture(RTSP_URL)
+    while True:
+        success, frame = cap.read()
+        if not success:
+            break
+        else:
+            ret, buffer = cv2.imencode('.jpg', frame)
+            frame = buffer.tobytes()
+            yield (b'--frame\r\n'
+                   b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
 
 # ====================================================================
 # ROUTES — XÁC THỰC
@@ -454,11 +419,22 @@ def logout():
     session.clear()
     return redirect(url_for('login'))
 
+# Thêm vào run1.py
 @app.route('/')
 def index():
     if not session.get('logged_in'):
         return redirect(url_for('login'))
-    return render_template('index.html',
+    
+    # Detect thiết bị dựa vào User-Agent
+    user_agent = request.headers.get('User-Agent', '').lower()
+    is_mobile = any(device in user_agent for device in [
+        'android', 'iphone', 'ipad', 'ipod', 
+        'mobile', 'blackberry', 'windows phone'
+    ])
+    
+    template = 'mobile.html' if is_mobile else 'index.html'
+    
+    return render_template(template,
                            username=session.get('username'),
                            role=session.get('role', 'viewer'))
 
@@ -488,13 +464,29 @@ def get_stream_url():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@app.route('/ptz', methods=['POST'])
+@app.route('/ptz_control', methods=['POST'])
 def ptz_control():
-    if not session.get('logged_in'):
-        return jsonify({'status': 'error'}), 401
-    d = request.get_json()
-    ptz_executor.submit(move_c6n, d.get('direction', 'STOP'), 0)
-    return jsonify({'status': 'success'})
+    data = request.json
+    action = data.get('action')
+    print(f"[ĐIỀU KHIỂN] Web gửi lệnh: {action.upper()}")
+    
+    if tapo_cam is not None:
+        step = 15 
+        try:
+            if action == 'up':
+                tapo_cam.moveMotor(0, step)
+            elif action == 'down':
+                tapo_cam.moveMotor(0, -step)
+            elif action == 'left':
+                tapo_cam.moveMotor(-step, 0)
+            elif action == 'right':
+                tapo_cam.moveMotor(step, 0)
+            elif action == 'home':
+                tapo_cam.calibrateMotor()
+        except Exception as e:
+            print(f"[LỖI MOTOR] {e}")
+
+    return jsonify({"status": "success", "action": action})
 
 # ====================================================================
 # ROUTES — CHUYỂN CHẾ ĐỘ
@@ -574,18 +566,32 @@ def fan_stop_route():
 def fan_status():
     if not session.get('logged_in'):
         return jsonify({'status': 'error'}), 401
+
     _, hw_hz, hw_rpm = read_hw_status()
+
+    # Đọc nhiệt độ và tính level theo ngưỡng người dùng cài đặt
+    temp  = read_temperature()
+    level = 'Không có cảm biến'
+    if temp is not None:
+        low_max = TEMP_THRESHOLD[0][0]
+        mid_max = TEMP_THRESHOLD[1][0]
+        if   temp < low_max: level = 'Thấp'
+        elif temp < mid_max: level = 'Trung bình'
+        else:                level = 'Cao'
+
     return jsonify({
         'rpm'         : fan_rpm,
         'hz'          : rpm_to_hz(fan_rpm),
         'running'     : fan_running,
         'hw_hz'       : hw_hz,
         'hw_rpm'      : hw_rpm,
-        'people'      : people_count if smart_active else None,
-        'ai_mode'     : smart_active,
-        'smart_active': smart_active,
         'modbus'      : modbus_ok,
-        'hailo'       : HAILO_AVAILABLE,
+        'smart_active': smart_active,
+        'ai_mode'     : smart_active,           # ← thêm
+        'people'      : people_count if smart_active else None,  # ← thêm
+        'temp'        : temp,                   # ← thêm
+        'temp_level'  : level,                  # ← thêm — dùng ngưỡng mới
+        'hailo'       : HAILO_AVAILABLE,        # ← thêm
     })
 
 @app.route('/modbus/reconnect', methods=['POST'])
@@ -603,9 +609,12 @@ def temperature():
     temp  = read_temperature()
     level = 'Không có cảm biến'
     if temp is not None:
-        if   temp < 28: level = 'Thấp'
-        elif temp < 35: level = 'Trung bình'
-        else:           level = 'Cao'
+        # Dùng ngưỡng người dùng đã cài đặt thay vì cứng
+        low_max = TEMP_THRESHOLD[0][0]
+        mid_max = TEMP_THRESHOLD[1][0]
+        if   temp < low_max: level = 'Thấp'
+        elif temp < mid_max: level = 'Trung bình'
+        else:                level = 'Cao'
     return jsonify({'temp': temp, 'level': level})
 
 # ====================================================================
@@ -708,14 +717,27 @@ def settings_temp_threshold_get():
         'mid_rpm' : TEMP_THRESHOLD[1][1],
         'high_rpm': TEMP_THRESHOLD[2][1],
     })
-
+# ====================================================================
+# ROUTE — API
+# ====================================================================
+@app.route('/eco/timer_override', methods=['POST'])
+def eco_timer_override():
+    global timer_override
+    if not session.get('logged_in'):
+        return jsonify({'status': 'error'}), 401
+    data = request.get_json()
+    timer_override = bool(data.get('active', False))
+    print(f"[TIMER] Override: {timer_override}")
+    return jsonify({'status': 'ok', 'timer_override': timer_override})
 # ====================================================================
 # KHỞI ĐỘNG
 # ====================================================================
 if __name__ == '__main__':
+    # Kill cổng web
     os.system("fuser -k 5000/tcp 2>/dev/null || true")
-    time.sleep(0.5)
-
+    # Kill cổng serial trước khi connect
+    os.system("fuser -k /dev/ttyACM0 2>/dev/null || true")
+    time.sleep(1)  # Tăng từ 0.5 lên 1s cho chắc
     print("[STARTUP] Đang kết nối Modbus...")
     if modbus_connect():
         print("[STARTUP] ✅ Modbus sẵn sàng — quạt có thể điều khiển")

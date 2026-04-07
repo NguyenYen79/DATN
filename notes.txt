@@ -31,4 +31,14 @@ sudo fuser /dev/ttyACM0
 
 # Bước 4 — Chạy lại
 python run1.py
+-tắt node-red
+# Tắt và disable hoàn toàn
+sudo systemctl stop nodered
+sudo systemctl disable nodered
+
+# Kiểm tra đã tắt chưa
+sudo systemctl status nodered
+
+# Kiểm tra cổng đã trống chưa
+sudo lsof /dev/ttyACM0
 
