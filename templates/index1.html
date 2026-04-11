@@ -2003,7 +2003,6 @@
     }, 3000);
     // ── BÁO CÁO ──────────────────────────────────────────
     let reportChart = null;
-    let _currentFilter = 'today'
 
     const REPORT_DATA = {
         today: {
@@ -2044,117 +2043,85 @@
         document.querySelectorAll('#sidebar nav a')[2].className =
             'flex items-center gap-3 px-4 py-3 bg-blue-50 text-blue-600 rounded-xl font-semibold';
         setFilter('today');
-        loadReportData();
     }
-    async function loadReportData(period) {
-    _currentFilter = period;
 
-    // Lấy dữ liệu tổng hợp thực từ server
-    try {
-        const res  = await fetch('/report/data');
-        const data = await res.json();
-        if (data.status === 'ok') {
-            document.getElementById('rpt-energy').innerHTML =
-                data.energy_kwh + ' <span class="text-sm font-medium text-slate-400">kWh</span>';
-            document.getElementById('rpt-uptime').innerHTML  = data.total_runtime;
-            document.getElementById('rpt-avgtemp').innerHTML =
-                data.avg_temp + ' <span class="text-sm font-medium text-slate-400">°C</span>';
-            document.getElementById('rpt-aicount').innerHTML =
-                data.ai_adjust_count + ' <span class="text-sm font-medium text-slate-400">lần</span>';
-
-            // Biểu đồ từ dữ liệu thực
-            const chart = data.chart || {};
-            renderReportChart(chart.labels || [], chart.temps || [], chart.rpms || []);
-        }
-    } catch(e) { console.error('[REPORT]', e); }
-}
-
-
-    function renderReportChart(labels, temps, rpms) {
+    function setFilter(period) {
+        ['today','7day','30day'].forEach(p => {
+            const btn = document.getElementById('filter-' + p);
+            btn.className = p === period ? 'filter-btn active' : 'filter-btn';
+        });
+        const d = REPORT_DATA[period];
+        document.getElementById('rpt-energy').innerHTML  = d.energy  + ' <span class="text-sm font-medium text-slate-400">kWh</span>';
+        document.getElementById('rpt-uptime').innerHTML  = d.uptime;
+        document.getElementById('rpt-avgtemp').innerHTML = d.avgtemp + ' <span class="text-sm font-medium text-slate-400">°C</span>';
+        document.getElementById('rpt-aicount').innerHTML = d.aicount + ' <span class="text-sm font-medium text-slate-400">lần</span>';
         const ctx = document.getElementById('report-chart').getContext('2d');
         if (reportChart) reportChart.destroy();
         reportChart = new Chart(ctx, {
             type: 'line',
             data: {
-                labels,
+                labels: d.labels,
                 datasets: [
                     {
                         label: 'Nhiệt độ (°C)',
-                        data: temps,
+                        data: d.temps,
                         borderColor: '#f87171',
                         backgroundColor: 'rgba(248,113,113,0.08)',
                         borderWidth: 2.5,
                         pointBackgroundColor: '#f87171',
                         pointRadius: 4,
-                        tension: 0.4, fill: true, yAxisID: 'y',
-                        spanGaps: true,   // bỏ qua null (giờ không có dữ liệu)
+                        tension: 0.4,
+                        fill: true,
+                        yAxisID: 'y',
                     },
                     {
                         label: 'Tốc độ quạt (RPM)',
-                        data: rpms,
+                        data: d.rpms,
                         borderColor: '#3b82f6',
                         backgroundColor: 'rgba(59,130,246,0.06)',
                         borderWidth: 2.5,
                         pointBackgroundColor: '#3b82f6',
                         pointRadius: 4,
-                        tension: 0.4, fill: true, yAxisID: 'y1',
-                        spanGaps: true,
+                        tension: 0.4,
+                        fill: true,
+                        yAxisID: 'y1',
                     }
                 ]
             },
             options: {
                 responsive: true,
-                interaction: { mode: 'index', intersect: false },
+                interaction: { mode:'index', intersect:false },
                 plugins: {
-                    legend: { display: false },
+                    legend: { display:false },
                     tooltip: {
-                        backgroundColor: '#1e293b', titleColor: '#94a3b8',
-                        bodyColor: '#e2e8f0', padding: 10, cornerRadius: 10,
+                        backgroundColor: '#1e293b',
+                        titleColor: '#94a3b8',
+                        bodyColor: '#e2e8f0',
+                        padding: 10,
+                        cornerRadius: 10,
                     }
                 },
                 scales: {
-                    x: { grid: { color: 'rgba(0,0,0,0.05)' }, ticks: { font: { weight: '700', size: 11 }, color: '#94a3b8' } },
+                    x: {
+                        grid: { color:'rgba(0,0,0,0.05)' },
+                        ticks: { font:{ weight:'700', size:11 }, color:'#94a3b8' }
+                    },
                     y: {
                         position: 'left',
-                        title: { display: true, text: '°C', color: '#f87171', font: { weight: '700' } },
-                        grid: { color: 'rgba(0,0,0,0.05)' },
-                        ticks: { color: '#f87171', font: { weight: '700' } }
+                        title: { display:true, text:'°C', color:'#f87171', font:{weight:'700'} },
+                        grid: { color:'rgba(0,0,0,0.05)' },
+                        ticks: { color:'#f87171', font:{weight:'700'} }
                     },
                     y1: {
                         position: 'right',
-                        title: { display: true, text: 'RPM', color: '#3b82f6', font: { weight: '700' } },
-                        grid: { drawOnChartArea: false },
-                        ticks: { color: '#3b82f6', font: { weight: '700' } }
+                        title: { display:true, text:'RPM', color:'#3b82f6', font:{weight:'700'} },
+                        grid: { drawOnChartArea:false },
+                        ticks: { color:'#3b82f6', font:{weight:'700'} }
                     }
                 }
             }
         });
     }
-    function setFilter(period) {
-        ['today', '7day', '30day'].forEach(p => {
-            document.getElementById('filter-' + p).className = p === period ? 'filter-btn active' : 'filter-btn';
-        });
-        loadReportData(period);
-    }
-
-    // Gọi khi mở trang báo cáo
-    function openReport() {
-        document.querySelector('header').style.display = 'none';
-        document.getElementById('page-history').style.display  = 'none';
-        document.getElementById('page-home').style.display     = 'none';
-        document.getElementById('page-main').style.display     = 'none';
-        document.getElementById('page-settings').style.display = 'none';
-        document.getElementById('page-report').style.display   = 'block';
-        document.querySelectorAll('#sidebar nav a').forEach(a => {
-            a.className = 'flex items-center gap-3 px-4 py-3 text-slate-500 hover:bg-slate-50 hover:text-slate-700 rounded-xl font-medium transition';
-        });
-        document.querySelectorAll('#sidebar nav a')[2].className =
-            'flex items-center gap-3 px-4 py-3 bg-blue-50 text-blue-600 rounded-xl font-semibold';
-        setFilter('today');
-    }
-
-
-
 
     // ── LỊCH SỬ ──────────────────────────────────────────
     const HISTORY_DATA = {
@@ -2239,84 +2206,73 @@
         setPeriod('1m');
     }
 
-    async function setPeriod(period) {
+    function setPeriod(period) {
         currentPeriod = period;
-        ['1m', '2m', '3m'].forEach(p => {
-            document.getElementById('period-' + p).className = p === period ? 'period-btn active' : 'period-btn';
+        ['1m','2m','3m'].forEach(p => {
+            document.getElementById('period-' + p).className =
+                p === period ? 'period-btn active' : 'period-btn';
         });
 
-        // Hiện loading
-        document.getElementById('his-energy').innerHTML  = '<span class="text-slate-400">...</span>';
-        document.getElementById('his-avgtemp').innerHTML = '<span class="text-slate-400">...</span>';
-        document.getElementById('his-uptime').innerHTML  = '<span class="text-slate-400">...</span>';
-        document.getElementById('his-aicount').innerHTML = '<span class="text-slate-400">...</span>';
-        document.getElementById('history-table-body').innerHTML = '<div class="py-4 text-center text-sm text-slate-400">Đang tải...</div>';
+        const d = HISTORY_DATA[period];
 
-        try {
-            const res  = await fetch(`/history/period/${period}`);
-            const data = await res.json();
-            if (data.status !== 'ok') return;
+        // Cập nhật stat cards
+        document.getElementById('his-energy').innerHTML  = d.energy;
+        document.getElementById('his-avgtemp').innerHTML = d.avgtemp;
+        document.getElementById('his-uptime').innerHTML  = d.uptime;
+        document.getElementById('his-aicount').innerHTML = d.aicount;
+        document.getElementById('his-count').innerText   = d.events.length + ' sự kiện';
 
-            document.getElementById('his-energy').innerHTML  = data.energy;
-            document.getElementById('his-avgtemp').innerHTML = data.avgtemp;
-            document.getElementById('his-uptime').innerHTML  = data.uptime;
-            document.getElementById('his-aicount').innerHTML = data.aicount;
-            document.getElementById('his-count').innerText   = (data.events?.length || 0) + ' sự kiện';
-
-            const tbody = document.getElementById('history-table-body');
-            tbody.innerHTML = '';
-            if (!data.events || data.events.length === 0) {
-                tbody.innerHTML = '<div class="py-6 text-center text-sm text-slate-400">Chưa có dữ liệu trong kỳ này</div>';
-                return;
-            }
-            data.events.forEach(ev => {
-                const style = MODE_STYLE[ev.mode] || MODE_STYLE['MANUAL'];
-                tbody.innerHTML += `
-                    <div class="event-row">
-                        <span class="text-xs font-semibold text-slate-500">${ev.time}</span>
-                        <span><span class="event-badge" style="${style}">${ev.mode || '—'}</span></span>
-                        <span class="text-xs font-bold text-red-500">${ev.temp || '—'}</span>
-                        <span class="text-xs font-bold text-blue-500">${ev.rpm || '—'}</span>
-                        <span class="text-xs font-bold text-purple-500">${ev.people || '—'}</span>
-                        <span class="text-xs text-slate-600 font-medium">${ev.event || '—'}</span>
-                    </div>`;
-            });
-        } catch(e) {
-            console.error('[HISTORY]', e);
-            document.getElementById('history-table-body').innerHTML =
-                '<div class="py-4 text-center text-sm text-red-400">Lỗi tải dữ liệu</div>';
-        }
+        // Render bảng
+        const tbody = document.getElementById('history-table-body');
+        tbody.innerHTML = '';
+        d.events.forEach(ev => {
+            const style = MODE_STYLE[ev.mode] || '';
+            tbody.innerHTML += `
+                <div class="event-row">
+                    <span class="text-xs font-semibold text-slate-500">${ev.time}</span>
+                    <span><span class="event-badge" style="${style}">${ev.mode}</span></span>
+                    <span class="text-xs font-bold text-red-500">${ev.temp}</span>
+                    <span class="text-xs font-bold text-blue-500">${ev.rpm}</span>
+                    <span class="text-xs font-bold text-purple-500">${ev.people}</span>
+                    <span class="text-xs text-slate-600 font-medium">${ev.event}</span>
+                </div>`;
+        });
     }
 
-    // Xuất Excel — từ dữ liệu thực
-    async function exportExcel() {
-        try {
-            const res  = await fetch(`/history/period/${currentPeriod}`);
-            const data = await res.json();
-            const periodLabel = { '1m': '1 tháng', '2m': '2 tháng', '3m': '3 tháng' }[currentPeriod];
+    function exportExcel() {
+        const d = HISTORY_DATA[currentPeriod];
+        const periodLabel = { '1m':'1 tháng', '2m':'2 tháng', '3m':'3 tháng' }[currentPeriod];
 
-            const summary = [
-                ['BÁO CÁO LỊCH SỬ HOẠT ĐỘNG - FANCO AI'],
-                ['Kỳ báo cáo:', periodLabel],
-                ['Xuất lúc:', new Date().toLocaleString('vi-VN')],
-                [],
-                ['TỔNG ĐIỆN NĂNG', 'NHIỆT ĐỘ TB', 'SỐ GIỜ HOẠT ĐỘNG', 'AI CAN THIỆP'],
-                [data.energy, data.avgtemp, data.uptime, data.aicount],
-            ];
-            const detail = [
-                ['Thời gian', 'Chế độ', 'Nhiệt độ', 'RPM', 'Số người', 'Sự kiện'],
-                ...(data.events || []).map(ev => [ev.time, ev.mode, ev.temp, ev.rpm, ev.people, ev.event])
-            ];
-            const wb  = XLSX.utils.book_new();
-            const ws1 = XLSX.utils.aoa_to_sheet(summary);
-            const ws2 = XLSX.utils.aoa_to_sheet(detail);
-            ws2['!cols'] = [{wch:14},{wch:8},{wch:10},{wch:6},{wch:8},{wch:40}];
-            XLSX.utils.book_append_sheet(wb, ws1, 'Tóm tắt');
-            XLSX.utils.book_append_sheet(wb, ws2, 'Chi tiết sự kiện');
-            const fn = `FanCoAI_LichSu_${periodLabel.replace(' ','')}` +
-                    `_${new Date().toLocaleDateString('vi-VN').replace(/\//g,'-')}.xlsx`;
-            XLSX.writeFile(wb, fn);
-        } catch(e) { alert('Lỗi xuất Excel: ' + e); }
+        // Sheet 1: Tóm tắt
+        const summary = [
+            ['BÁO CÁO LỊCH SỬ HOẠT ĐỘNG - FANCO AI'],
+            ['Kỳ báo cáo:', periodLabel],
+            ['Xuất lúc:', new Date().toLocaleString('vi-VN')],
+            [],
+            ['TỔNG ĐIỆN NĂNG', 'NHIỆT ĐỘ TB', 'SỐ GIỜ HOẠT ĐỘNG', 'AI CAN THIỆP'],
+            [d.energy, d.avgtemp, d.uptime, d.aicount],
+        ];
+
+        // Sheet 2: Chi tiết sự kiện
+        const detail = [
+            ['Thời gian', 'Chế độ', 'Nhiệt độ', 'RPM', 'Số người', 'Sự kiện'],
+            ...d.events.map(ev => [ev.time, ev.mode, ev.temp, ev.rpm, ev.people, ev.event])
+        ];
+
+        const wb = XLSX.utils.book_new();
+        const ws1 = XLSX.utils.aoa_to_sheet(summary);
+        const ws2 = XLSX.utils.aoa_to_sheet(detail);
+
+        // Style cột rộng hơn
+        ws2['!cols'] = [
+            {wch:14}, {wch:8}, {wch:10}, {wch:6}, {wch:8}, {wch:40}
+        ];
+
+        XLSX.utils.book_append_sheet(wb, ws1, 'Tóm tắt');
+        XLSX.utils.book_append_sheet(wb, ws2, 'Chi tiết sự kiện');
+
+        const filename = `FanCoAI_LichSu_${periodLabel.replace(' ','')}_${new Date().toLocaleDateString('vi-VN').replace(/\//g,'-')}.xlsx`;
+        XLSX.writeFile(wb, filename);
     }
 
     // ── HẸN GIỜ ECO ─────────────────────────────────────
