@@ -1002,15 +1002,7 @@
 
                         <!-- MINI CARDS -->
                         <div class="mt-2 space-y-2 pt-3 border-t border-slate-100">
-                            <div class="mini-card">
-                                <div>
-                                    <p class="text-xs font-semibold text-slate-500 mb-0.5">TỔNG NĂNG LƯỢNG</p>
-                                    <p class="text-base font-black text-slate-800">1.250 <span class="text-xs text-slate-400 font-medium">kWh</span></p>
-                                </div>
-                                <div class="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-500 flex items-center justify-center">
-                                    <i class="fas fa-chart-bar text-sm"></i>
-                                </div>
-                            </div>
+                            
                             <div class="mini-card">
                                 <div>
                                     <p class="text-xs font-semibold text-slate-500 mb-0.5">TỐC ĐỘ QUẠT</p>
@@ -1223,15 +1215,7 @@
                             
                             <!-- MINI CARDS ECO -->
                             <div class="space-y-2 mb-4 pt-3 border-t border-slate-100">
-                                <div class="mini-card">
-                                    <div>
-                                        <p class="text-xs font-semibold text-slate-500 mb-0.5">TỔNG NĂNG LƯỢNG</p>
-                                        <p class="text-base font-black text-slate-800">1.250 <span class="text-xs text-slate-400 font-medium">kWh</span></p>
-                                    </div>
-                                    <div class="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-500 flex items-center justify-center">
-                                        <i class="fas fa-chart-bar text-sm"></i>
-                                    </div>
-                                </div>
+                                
                                 <div class="mini-card">
                                     <div>
                                         <p class="text-xs font-semibold text-slate-500 mb-0.5">TỐC ĐỘ QUẠT</p>
@@ -1287,15 +1271,7 @@
                         </div>
 
                         <!-- MINI CARD SMART -->
-                        <div class="mini-card w-full mb-4">
-                            <div>
-                                <p class="text-xs font-semibold text-slate-500 mb-0.5">TỔNG NĂNG LƯỢNG</p>
-                                <p class="text-base font-black text-slate-800">1.250 <span class="text-xs text-slate-400 font-medium">kWh</span></p>
-                            </div>
-                            <div class="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-500 flex items-center justify-center">
-                                <i class="fas fa-chart-bar text-sm"></i>
-                            </div>
-                        </div>
+                        
                         <!-- Status bar SMART -->
                         <div id="fan-status-bar-smart" class="flex items-center justify-center gap-2 mb-3 font-bold"
                             style="color:#991b1b; font-size:1.1rem;">
@@ -1980,6 +1956,8 @@
                 document.getElementById('disp-hw').innerText = 'HW: ' + data.hw_hz + ' Hz';
 
             updateFanUI(data.rpm, data.hz, data.running);
+            if (!data.ai_mode && !sliderDragging)
+                document.getElementById('rpm-slider').value = Math.round(data.rpm);
 
             if (!data.ai_mode && !sliderDragging && !sliderUserControlled)
                 document.getElementById('rpm-slider').value = Math.round(data.rpm);

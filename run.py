@@ -276,11 +276,11 @@ def data_collector_thread():
             temp = read_temperature()
 
             # ── 2. Biến tần: RPM / Hz thực tế từ hardware ──
-            if in_schedule and not fan_running_real:
-                run_fan(rpm)
+            # if in_schedule and not fan_running_real:
+            #     run_fan(rpm)
 
-            elif not in_schedule and fan_running_real:
-                stop_fan()
+            # elif not in_schedule and fan_running_real:
+            #     stop_fan()
             rpm  = hw_rpm if hw_rpm is not None else fan_rpm
             hz   = hw_hz  if hw_hz  is not None else rpm_to_hz(fan_rpm)
             running = fan_running
@@ -852,24 +852,27 @@ def read_hw_status():
 def run_fan(rpm):
     global fan_rpm, fan_running, _session_start, _last_logged_rpm
     rpm = max(0.0, min(float(rpm), MAX_RPM))
+
     if not modbus_ok:
         modbus_connect()
+
     ok_freq = set_speed_rpm(rpm)
     time.sleep(0.3)
-    ok_run = start_motor()
-    if ok_run:
-        fan_rpm     = rpm
-        fan_running = True
-        if _session_start is None:
-            _session_start = time.time()
-        # Ghi log khi RPM thay đổi
-        if rpm != _last_logged_rpm:
-            _last_logged_rpm = rpm
-            temp = read_temperature()
-            event = f"Bật quạt {int(rpm)} RPM" if _last_logged_rpm is None else f"Đổi tốc độ → {int(rpm)} RPM"
-            log_event(event, rpm=rpm, temp=temp, people=people_count if smart_active else None)
-        return True
-    return False
+    ok_run  = start_motor()
+
+    # Set trạng thái NGAY, không phụ thuộc Modbus thành công hay không
+    fan_rpm     = rpm
+    fan_running = True
+
+    if _session_start is None:
+        _session_start = time.time()
+    if rpm != _last_logged_rpm:
+        _last_logged_rpm = rpm
+        temp = read_temperature()
+        log_event(f"Bật quạt {int(rpm)} RPM", rpm=rpm, temp=temp,
+                  people=people_count if smart_active else None)
+
+    return ok_run
 def stop_fan():
     global fan_rpm, fan_running, _session_start, _total_runtime, _last_logged_rpm
     stop_motor()
@@ -1256,8 +1259,10 @@ def fan_status():
     if not session.get('logged_in'):
         return jsonify({'status': 'error'}), 401
 
-    _, _, hw_rpm = read_hw_status()
-    fan_running_real = hw_rpm > 0
+    _, _hw_hz, _hw_rpm = read_hw_status()
+    fan_running_real = (_hw_rpm or 0) > 0
+    hw_rpm = _hw_rpm if (_hw_rpm is not None and _hw_rpm > 0) else fan_rpm
+    hw_hz  = _hw_hz  if (_hw_hz  is not None and _hw_hz  > 0) else rpm_to_hz(fan_rpm)
     # Đọc nhiệt độ và tính level theo ngưỡng người dùng cài đặt
     temp  = read_temperature()
     level = 'Không có cảm biến'
@@ -1328,12 +1333,8 @@ def cpu_temp():
 def eco_save():
     global eco_schedule
     if not session.get('logged_in'):
-        return jsonify({
-            'status': 'ok',
-            'start': start,
-            'stop': stop,
-            'fan_running': fan_running
-        })
+        return jsonify({'status': 'error'}), 401
+
     data = request.get_json()
 
     def to_24h(h, m, ap):
@@ -1345,33 +1346,35 @@ def eco_save():
     start   = to_24h(data['start_h'], data['start_m'], data['start_ap'])
     stop    = to_24h(data['stop_h'],  data['stop_m'],  data['stop_ap'])
     eco_rpm = int(data.get('rpm', 33))
+
     eco_schedule = {'start': start, 'stop': stop, 'rpm': eco_rpm}
     print(f"[ECO] Lịch trình đã lưu: BẬT {start} — TẮT {stop} | {eco_rpm} RPM")
 
-    # Xử lý ngay khi lưu — không chờ thread
+    # Kiểm tra ngay khi lưu
     now_dt  = datetime.now()
     now_min = now_dt.hour * 60 + now_dt.minute
-
     sh, sm  = map(int, start.split(':'))
     eh, em  = map(int, stop.split(':'))
-
     start_min = sh * 60 + sm
     stop_min  = eh * 60 + em
 
-    rpm = eco_rpm
-
     in_schedule = start_min <= now_min < stop_min
 
-    print(f"[ECO-SAVE] now={now_min} | start={start_min} | stop={stop_min} | in={in_schedule}")
+    # Dùng fan_running trực tiếp (đã được fix ở run_fan)
+    if in_schedule and not fan_running:
+        print("[ECO] → Đang trong giờ, BẬT ngay")
+        fan_control("start", eco_rpm, source="Eco")
+    elif not in_schedule and fan_running:
+        print("[ECO] → Ngoài giờ, TẮT ngay")
+        fan_control("stop", source="Eco")
 
-    if in_schedule:
-        if not fan_running:
-            print("[ECO] → BẬT ngay sau khi lưu")
-            fan_control("start", rpm, source="Eco")
-    else:
-        if fan_running:
-            print("[ECO] → TẮT ngay sau khi lưu")
-            fan_control("stop", source="Eco"))
+    return jsonify({
+        'status'     : 'ok',
+        'start'      : start,
+        'stop'       : stop,
+        'in_schedule': in_schedule,
+        'fan_running': fan_running,
+    })
 
 @app.route('/eco/cancel', methods=['POST'])
 def eco_cancel():

@@ -491,6 +491,7 @@
         <div id="panel-Eco" class="space-y-3" style="display:none;">
             <div class="card p-3">
                 <p class="font-bold text-slate-700 text-sm mb-3">Lịch trình hoạt động ECO</p>
+                
                 <!-- Giờ bật -->
                 <div class="p-3 bg-slate-50 rounded-xl border border-slate-100 mb-2">
                     <label class="text-xs font-bold text-slate-500 uppercase block mb-2">Giờ bật</label>
@@ -530,6 +531,42 @@
                         <input type="radio" name="eco-speed" value="100" class="accent-emerald-500" onchange="setEcoSpeed(100)">
                         <span class="text-xs font-bold text-slate-700">🔴 Mức 3</span>
                     </label>
+                </div>
+                <!-- Repeat mode mobile -->
+                <div class="mb-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-bold text-slate-500 uppercase">Chế độ lặp lại</span>
+                        <span id="m-repeat-summary" class="text-xs font-bold text-emerald-600">
+                            <i class="fas fa-redo mr-1"></i> 1 lần
+                        </span>
+                    </div>
+                    <div class="flex gap-2 mb-2">
+                        <label class="flex-1 flex items-center gap-2 p-2 rounded-xl bg-white border border-slate-200 cursor-pointer">
+                            <input type="radio" name="m-repeat-mode" value="once" class="accent-emerald-500"
+                                onchange="setMobileRepeatMode('once')" checked>
+                            <span class="text-xs font-bold text-slate-700">1 lần</span>
+                        </label>
+                        <label class="flex-1 flex items-center gap-2 p-2 rounded-xl bg-white border border-slate-200 cursor-pointer">
+                            <input type="radio" name="m-repeat-mode" value="daily" class="accent-emerald-500"
+                                onchange="setMobileRepeatMode('daily')">
+                            <span class="text-xs font-bold text-slate-700">Hằng ngày</span>
+                        </label>
+                        <label class="flex-1 flex items-center gap-2 p-2 rounded-xl bg-white border border-slate-200 cursor-pointer">
+                            <input type="radio" name="m-repeat-mode" value="custom" class="accent-emerald-500"
+                                onchange="setMobileRepeatMode('custom')">
+                            <span class="text-xs font-bold text-slate-700">Tùy chọn</span>
+                        </label>
+                    </div>
+                    <!-- Checkbox các ngày — chỉ hiện khi chọn Tùy chọn -->
+                    <div id="m-repeat-days" class="hidden flex-wrap gap-1.5 flex mt-1">
+                        <label class="repeat-day-btn"><input type="checkbox" value="mon" class="hidden"><span>T2</span></label>
+                        <label class="repeat-day-btn"><input type="checkbox" value="tue" class="hidden"><span>T3</span></label>
+                        <label class="repeat-day-btn"><input type="checkbox" value="wed" class="hidden"><span>T4</span></label>
+                        <label class="repeat-day-btn"><input type="checkbox" value="thu" class="hidden"><span>T5</span></label>
+                        <label class="repeat-day-btn"><input type="checkbox" value="fri" class="hidden"><span>T6</span></label>
+                        <label class="repeat-day-btn"><input type="checkbox" value="sat" class="hidden"><span>T7</span></label>
+                        <label class="repeat-day-btn"><input type="checkbox" value="sun" class="hidden"><span>CN</span></label>
+                    </div>
                 </div>
                 <!-- Messages -->
                 <div id="eco-save-msg" class="hidden items-center gap-2 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-xl mb-2 text-sm font-bold text-emerald-700">
@@ -1577,6 +1614,19 @@ function cancelSmart() {
 // ── ECO ───────────────────────────────────────────────
 let ecoSpeed = 33;
 function setEcoSpeed(rpm) { ecoSpeed = rpm; }
+function setMobileRepeatMode(mode) {
+    const daysDiv = document.getElementById('m-repeat-days');
+    const summary = document.getElementById('m-repeat-summary');
+    if (mode === 'custom') {
+        daysDiv.classList.remove('hidden');
+        summary.innerHTML = '<i class="fas fa-redo mr-1"></i> Tùy chọn ngày';
+    } else {
+        daysDiv.classList.add('hidden');
+        summary.innerHTML = mode === 'once'
+            ? '<i class="fas fa-redo mr-1"></i> 1 lần'
+            : '<i class="fas fa-redo mr-1"></i> Hằng ngày';
+    }
+}
 
 function generateTimeOptions() {
     ['s-h','e-h'].forEach(id => {
@@ -1591,20 +1641,51 @@ function generateTimeOptions() {
 
 async function saveEco() {
     if (USER_ROLE !== 'admin') { alert('⚠️ Bạn chỉ có quyền xem!'); return; }
-    const msg = document.getElementById('eco-save-msg');
-    msg.classList.remove('hidden'); msg.style.display = 'flex';
-    setTimeout(() => { msg.classList.add('hidden'); msg.style.display = 'none'; }, 2000);
-    updateFanStatusBar('turning_on');
-    fetch('/eco/save', {
-        method: 'POST', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({
-            start_h: document.getElementById('s-h').value, start_m: document.getElementById('s-m').value, start_ap: document.getElementById('s-ap').value,
-            stop_h:  document.getElementById('e-h').value, stop_m:  document.getElementById('e-m').value, stop_ap:  document.getElementById('e-ap').value,
-            rpm: ecoSpeed
-        })
-    }).then(() => updateFanStatusBar('on')).catch(e => {});
-}
 
+    const body = {
+        start_h:  document.getElementById('s-h').value,
+        start_m:  document.getElementById('s-m').value,
+        start_ap: document.getElementById('s-ap').value,
+        stop_h:   document.getElementById('e-h').value,
+        stop_m:   document.getElementById('e-m').value,
+        stop_ap:  document.getElementById('e-ap').value,
+        rpm: ecoSpeed
+    };
+
+    try {
+        const res  = await fetch('/eco/save', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(body)
+        });
+        const data = await res.json();
+
+        // Hiện thông báo lưu thành công
+        const msg = document.getElementById('eco-save-msg');
+        msg.classList.remove('hidden'); msg.style.display = 'flex';
+        setTimeout(() => { msg.classList.add('hidden'); msg.style.display = 'none'; }, 2000);
+
+        // Cập nhật UI dựa trên kết quả thực từ server
+        if (data.in_schedule) {
+            updateFanStatusBar('on');
+        } else {
+            updateFanStatusBar('off');
+        }
+
+        // Poll ngay lập tức để đồng bộ UI
+        setTimeout(async () => {
+            try {
+                const r = await fetch('/fan/status');
+                const d = await r.json();
+                updateFanUI(d.rpm, d.hz, d.running);
+                updateFanStatusBar(d.running ? 'on' : 'off');
+            } catch(e) {}
+        }, 1000);  // chờ 1s để backend xử lý xong
+
+    } catch(e) {
+        alert('Lỗi kết nối server!');
+    }
+}
 async function cancelEco() {
     if (USER_ROLE !== 'admin') { alert('⚠️ Bạn chỉ có quyền xem!'); return; }
     const msg = document.getElementById('eco-cancel-msg');
