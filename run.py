@@ -13,10 +13,10 @@ import struct
 import serial
 import json
 
+
 # ====================================================================
 # DATA LOGGING
 # ====================================================================
-import json
 
 LOG_FILE   = 'data_log.json'
 STATS_FILE = 'stats.json'
@@ -276,7 +276,11 @@ def data_collector_thread():
             temp = read_temperature()
 
             # ── 2. Biến tần: RPM / Hz thực tế từ hardware ──
-            _, hw_hz, hw_rpm = read_hw_status()
+            if in_schedule and not fan_running_real:
+                run_fan(rpm)
+
+            elif not in_schedule and fan_running_real:
+                stop_fan()
             rpm  = hw_rpm if hw_rpm is not None else fan_rpm
             hz   = hw_hz  if hw_hz  is not None else rpm_to_hz(fan_rpm)
             running = fan_running
@@ -378,11 +382,13 @@ threading.Thread(target=data_collector_thread, daemon=True).start()
 def power_meter():
     if not session.get('logged_in'):
         return jsonify({'status': 'error'}), 401
+
     with shared_state_lock:
         ss = dict(shared_state)
-    # Kiểm tra có dữ liệu không
+
     if ss.get('voltage') is None:
         return jsonify({'status': 'offline'})
+
     return jsonify({
         'status'        : 'ok',
         'voltage'       : ss.get('voltage'),
@@ -788,6 +794,30 @@ def hz_to_rpm(hz):   return float(hz) * 2.0
 def val_to_hz(v):    return round((v / 10000) * MAX_FREQ_HZ, 1)
 
 # ====================================================================
+# FAN CONTROL LAYER — LỚP ĐIỀU KHIỂN TRUNG TÂM
+# ====================================================================
+def fan_control(action, rpm=None, source="unknown"):
+    """
+    Hàm duy nhất điều khiển bật/tắt quạt cho toàn hệ thống
+    Manual / Smart / Eco đều phải đi qua đây
+    """
+
+    try:
+        if action == "start":
+            if rpm is None:
+                rpm = fan_rpm or 33.0
+            print(f"[FAN CTRL] ▶ START từ {source} | {rpm} RPM")
+            return run_fan(rpm)
+
+        elif action == "stop":
+            print(f"[FAN CTRL] ⏹ STOP từ {source}")
+            return stop_fan()
+
+    except Exception as e:
+        print(f"[FAN CTRL] ❌ Lỗi: {e}")
+        return False
+
+# ====================================================================
 # ĐIỀU KHIỂN BIẾN TẦN
 # ====================================================================
 def set_speed_rpm(rpm):
@@ -887,7 +917,7 @@ def smart_fan_thread():
 
         if rpm != _last_smart_rpm:
             print(f"[SMART] {temp}°C | {people_count} người → {rpm} RPM")
-            run_fan(rpm)
+            fan_control("start", rpm, source="Smart")
             _last_smart_rpm = rpm
     # Cập nhật stats
     global _temp_sum, _temp_count, _ai_adjust_count
@@ -905,14 +935,14 @@ threading.Thread(target=smart_fan_thread, daemon=True).start()
 # ====================================================================
 def eco_schedule_thread():
     while True:
-        time.sleep(5)
+        time.sleep(1)
         try:
             # Log trạng thái mỗi lần check
             print(f"[ECO-DEBUG] mode={current_mode} | eco_schedule={eco_schedule} | "
                   f"smart_active={smart_active} | fan_running={fan_running} | "
                   f"timer_override={timer_override}")
 
-            if eco_schedule is None or current_mode != 'Eco':
+            if eco_schedule is None:
                 continue
             if smart_active:
                 continue
@@ -935,10 +965,10 @@ def eco_schedule_thread():
 
             if in_schedule and not fan_running:
                 print(f"[ECO] → BẬT quạt {rpm} RPM")
-                run_fan(rpm)
+                fan_control("start", rpm, source="Eco")
             elif not in_schedule and fan_running:
                 print(f"[ECO] → TẮT quạt")
-                stop_fan()
+                fan_control("stop", source="Eco")
             else:
                 print(f"[ECO-DEBUG] Không làm gì — "
                       f"in_schedule={in_schedule}, fan_running={fan_running}")
@@ -1178,7 +1208,7 @@ def smart_start():
                 if temp <= thr:
                     rpm = r
                     break
-        run_fan(rpm)
+        fan_control("start", rpm, source="Smart")
         print(f"[SMART] Bắt đầu: {temp}°C → {rpm} RPM")
 
     threading.Thread(target=_start, daemon=True).start()
@@ -1193,7 +1223,10 @@ def smart_stop():
     _last_smart_rpm = None
 
     # Chạy trong thread riêng
-    threading.Thread(target=stop_fan, daemon=True).start()
+    threading.Thread(
+        target=lambda: fan_control("stop", source="Smart"),
+        daemon=True
+    ).start()
     return jsonify({'status': 'ok', 'smart_active': False})
 
 @app.route('/people_count')
@@ -1208,14 +1241,14 @@ def fan_set_rpm():
     if not session.get('logged_in'):
         return jsonify({'status': 'error'}), 401
     rpm = float(request.get_json().get('rpm', 0))
-    run_fan(rpm)
+    fan_control("start", rpm, source="Manual")
     return jsonify({'status':'ok', 'rpm':fan_rpm, 'hz':rpm_to_hz(fan_rpm), 'modbus':modbus_ok})
 
 @app.route('/fan/stop', methods=['POST'])
 def fan_stop_route():
     if not session.get('logged_in'):
         return jsonify({'status': 'error'}), 401
-    stop_fan()
+    fan_control("stop", source="Manual")
     return jsonify({'status': 'ok', 'rpm': 0, 'hz': 0, 'modbus': modbus_ok})
 
 @app.route('/fan/status')
@@ -1223,8 +1256,8 @@ def fan_status():
     if not session.get('logged_in'):
         return jsonify({'status': 'error'}), 401
 
-    _, hw_hz, hw_rpm = read_hw_status()
-
+    _, _, hw_rpm = read_hw_status()
+    fan_running_real = hw_rpm > 0
     # Đọc nhiệt độ và tính level theo ngưỡng người dùng cài đặt
     temp  = read_temperature()
     level = 'Không có cảm biến'
@@ -1295,7 +1328,12 @@ def cpu_temp():
 def eco_save():
     global eco_schedule
     if not session.get('logged_in'):
-        return jsonify({'status': 'error'}), 401
+        return jsonify({
+            'status': 'ok',
+            'start': start,
+            'stop': stop,
+            'fan_running': fan_running
+        })
     data = request.get_json()
 
     def to_24h(h, m, ap):
@@ -1313,27 +1351,27 @@ def eco_save():
     # Xử lý ngay khi lưu — không chờ thread
     now_dt  = datetime.now()
     now_min = now_dt.hour * 60 + now_dt.minute
+
     sh, sm  = map(int, start.split(':'))
     eh, em  = map(int, stop.split(':'))
+
     start_min = sh * 60 + sm
     stop_min  = eh * 60 + em
 
+    rpm = eco_rpm
+
     in_schedule = start_min <= now_min < stop_min
 
-    if in_schedule:
-        print(f"[ECO] → BẬT quạt {rpm} RPM")
-        run_fan(rpm)
-    else:
-        print(f"[ECO] → TẮT quạt (force)")
-        stop_fan()
+    print(f"[ECO-SAVE] now={now_min} | start={start_min} | stop={stop_min} | in={in_schedule}")
 
-    return jsonify({
-        'status'     : 'ok',
-        'start'      : start,
-        'stop'       : stop,
-        'in_schedule': in_schedule,
-        'fan_running': fan_running
-    })
+    if in_schedule:
+        if not fan_running:
+            print("[ECO] → BẬT ngay sau khi lưu")
+            fan_control("start", rpm, source="Eco")
+    else:
+        if fan_running:
+            print("[ECO] → TẮT ngay sau khi lưu")
+            fan_control("stop", source="Eco"))
 
 @app.route('/eco/cancel', methods=['POST'])
 def eco_cancel():
@@ -1341,7 +1379,7 @@ def eco_cancel():
     if not session.get('logged_in'):
         return jsonify({'status': 'error'}), 401
     eco_schedule = None
-    stop_fan()
+    fan_control("stop", source="Eco")
     print("[ECO] Đã hủy lịch trình — tắt quạt")
     return jsonify({'status': 'ok'})
 
@@ -1397,60 +1435,63 @@ def eco_timer_override():
         return jsonify({'status': 'error'}), 401
     data = request.get_json()
     timer_override = bool(data.get('active', False))
+    eco_schedule = new_data
+    check_eco_now()   # ← cực kỳ quan trọng
     print(f"[TIMER] Override: {timer_override}")
     return jsonify({'status': 'ok', 'timer_override': timer_override})
 
-# # ====================================================================
-# # ROUTE — ĐỒNG HỒ ĐIỆN
-# # ====================================================================
-# @app.route('/power_meter')
-# def power_meter():
-#     if not session.get('logged_in'):
-#         return jsonify({'status': 'error'}), 401
-#     data = read_all_power()
-#     return jsonify({'status': 'ok', **data})
+# ====================================================================
+# ROUTE — ĐỒNG HỒ ĐIỆN
+# ====================================================================
+@app.route('/power_meter/raw')
+def power_meter_raw():
+    if not session.get('logged_in'):
+        return jsonify({'status': 'error'}), 401
 
-# @app.route('/history')
-# def get_history():
-#     if not session.get('logged_in'):
-#         return jsonify({'status': 'error'}), 401
-#     return jsonify(history_data)
+    data = read_all_power()
+    return jsonify({'status': 'ok', **data})
 
-# @app.route('/report')
-# def report():
-#     if not session.get('logged_in'):
-#         return jsonify({'status': 'error'}), 401
+@app.route('/history')
+def get_history():
+    if not session.get('logged_in'):
+        return jsonify({'status': 'error'}), 401
+    return jsonify(history_data)
 
-#     if len(history_data) == 0:
-#         return jsonify({})
+@app.route('/report')
+def report():
+    if not session.get('logged_in'):
+        return jsonify({'status': 'error'}), 401
 
-#     total_time = 0
-#     total_temp = 0
-#     count = 0
-#     ai_changes = 0
-#     last_rpm = None
+    if len(history_data) == 0:
+        return jsonify({})
 
-#     for d in history_data:
-#         if d["running"]:
-#             total_time += 2
+    total_time = 0
+    total_temp = 0
+    count = 0
+    ai_changes = 0
+    last_rpm = None
 
-#         if d["temp"] is not None:
-#             total_temp += d["temp"]
-#             count += 1
+    for d in history_data:
+        if d["running"]:
+            total_time += 2
 
-#         if last_rpm is not None and d["rpm"] != last_rpm:
-#             ai_changes += 1
+        if d["temp"] is not None:
+            total_temp += d["temp"]
+            count += 1
 
-#         last_rpm = d["rpm"]
+        if last_rpm is not None and d["rpm"] != last_rpm:
+            ai_changes += 1
 
-#     avg_temp = total_temp / count if count else 0
+        last_rpm = d["rpm"]
 
-#     return jsonify({
-#         "total_runtime": total_time,
-#         "avg_temp": round(avg_temp, 1),
-#         "ai_adjustments": ai_changes,
-#         "total_energy": round(energy_kwh, 3)
-#     })
+    avg_temp = total_temp / count if count else 0
+
+    return jsonify({
+        "total_runtime": total_time,
+        "avg_temp": round(avg_temp, 1),
+        "ai_adjustments": ai_changes,
+        "total_energy": round(energy_kwh, 3)
+    })
 # ====================================================================
 # KHỞI ĐỘNG
 # ====================================================================
