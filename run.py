@@ -12,6 +12,7 @@ from pytapo import Tapo
 import struct
 import serial
 import json
+import paho.mqtt.client as mqtt
 
 
 # ====================================================================
@@ -69,8 +70,10 @@ def log_event(event_type, rpm=None, temp=None, mode=None, people=None):
                 logs = []
 
             # Thêm sự kiện mới
+            now = datetime.now()
             entry = {
                 'time'   : datetime.now().strftime('%d/%m %H:%M'),
+                'ts'      : now.timestamp(),
                 'mode'   : mode or current_mode,
                 'temp'   : f"{temp}°C" if temp else '—',
                 'rpm'    : str(int(rpm)) if rpm is not None else '0',
@@ -97,36 +100,23 @@ try:
         ConfigureParams, InputVStreamParams, OutputVStreamParams,
     )
     HAILO_AVAILABLE = True
-    print("[HAILO] ✅ hailo_platform import thành công")
+    print("[HAILO] ✅ Có Hailo")
 except ImportError as e:
     HAILO_AVAILABLE = False
-    print(f"[HAILO] ❌ Không tìm thấy hailo_platform: {e} — sẽ dùng CPU fallback")
+    print(f"[HAILO] ❌ Không có Hailo: {e}")
 
 # ====================================================================
 # YOLO CPU FALLBACK
 # ====================================================================
 try:
     from ultralytics import YOLO
-    yolo_cpu_model    = YOLO('yolov8n.pt')
+    yolo_cpu_model = YOLO('yolov8n.pt')
     YOLO_CPU_AVAILABLE = True
-    print("[YOLO-CPU] ✅ Load thành công")
+    print("[YOLO-CPU] ✅ Sẵn sàng")
 except Exception as e:
     YOLO_CPU_AVAILABLE = False
-    yolo_cpu_model    = None
+    yolo_cpu_model = None
     print(f"[YOLO-CPU] ❌ {e}")
-
-# ====================================================================
-# YOLO CPU FALLBACK — dùng khi Hailo không khả dụng
-# ====================================================================
-try:
-    from ultralytics import YOLO
-    yolo_cpu_model = YOLO('yolov8n.pt')  # Model nhỏ nhất, chạy trên CPU
-    YOLO_CPU_AVAILABLE = True
-    print("[YOLO-CPU] ✅ Model CPU load thành công")
-except Exception as e:
-    YOLO_CPU_AVAILABLE = False
-    print(f"[YOLO-CPU] ❌ Không load được: {e}")
-
 # ====================================================================
 # MODBUS — import có bảo vệ
 # ====================================================================
@@ -241,6 +231,62 @@ def read_power_register(address):
 
 def read_all_power():
     return {key: read_power_register(addr) for key, addr in POWER_REGISTERS.items()}
+# ====================================================================
+# Thêm hàm lấy people_count từ camera.py
+# ====================================================================
+CAMERA_SERVICE_URL = 'http://localhost:5001'
+_last_people_fetch = 0
+_camera_online     = False
+
+def fetch_people_count():
+    """Lấy số người từ camera.py qua HTTP."""
+    global people_count, _last_people_fetch, _camera_online
+    try:
+        r = requests.get(f'{CAMERA_SERVICE_URL}/people', timeout=1)
+        if r.status_code == 200:
+            data = r.json()
+            people_count   = data.get('count', 0)
+            _camera_online = True
+            _last_people_fetch = time.time()
+    except Exception:
+        _camera_online = False
+# ====================================================================
+# MQTT CONFIG
+# ====================================================================
+MQTT_BROKER = "broker.hivemq.com"
+MQTT_PORT   = 1883
+
+MQTT_TOPIC_STATUS  = "smartfan/status"
+MQTT_TOPIC_CONTROL = "smartfan/control"
+
+mqtt_client = mqtt.Client()
+def on_connect(client, userdata, flags, rc):
+    print("[MQTT] Connected:", rc)
+    client.subscribe(MQTT_TOPIC_CONTROL)
+
+def on_message(client, userdata, msg):
+    global fan_running
+
+    try:
+        data = json.loads(msg.payload.decode())
+        print("[MQTT] Nhận:", data)
+
+        if data.get("action") == "stop":
+            fan_control("stop", source="MQTT")
+
+        elif data.get("action") == "start":
+            rpm = data.get("rpm", 33)
+            fan_control("start", rpm, source="MQTT")
+
+    except Exception as e:
+        print("[MQTT] Lỗi:", e)
+
+mqtt_client.on_connect = on_connect
+mqtt_client.on_message = on_message
+
+def start_mqtt():
+    mqtt_client.connect(MQTT_BROKER, MQTT_PORT, 60)
+    mqtt_client.loop_start()
 # ====================================================================
 # SHARED STATE — dict trung tâm cho tất cả dữ liệu realtime
 # ====================================================================
@@ -457,7 +503,13 @@ def _build_chart_data(period):
         buckets = {h: {'temps': [], 'rpms': []} for h in range(0, 24, 2)}
         for entry in logs:
             try:
-                t = datetime.strptime(entry['time'], '%d/%m %H:%M')
+                ts = entry.get('ts')
+
+                if ts:
+                    t = datetime.fromtimestamp(ts)
+                else:
+                    t = datetime.strptime(entry['time'], '%d/%m %H:%M')
+                    t = t.replace(year=datetime.now().year)
                 if t.date() == now.date():
                     bucket = (t.hour // 2) * 2
                     temp = float(entry['temp'].replace('°C', '')) if entry['temp'] != '—' else None
@@ -532,8 +584,13 @@ def history_period(period):
     filtered = []
     for entry in logs:
         try:
-            t = datetime.strptime(entry['time'], '%d/%m %H:%M')
-            t = t.replace(year=datetime.now().year)
+            ts = entry.get('ts')
+
+            if ts:
+                t = datetime.fromtimestamp(ts)
+            else:
+                t = datetime.strptime(entry['time'], '%d/%m %H:%M')
+                t = t.replace(year=datetime.now().year)
             if t >= cutoff:
                 filtered.append(entry)
         except:
@@ -873,6 +930,10 @@ def run_fan(rpm):
                   people=people_count if smart_active else None)
 
     return ok_run
+    mqtt_client.publish(MQTT_TOPIC_STATUS, json.dumps({
+        "running": True,
+        "rpm": fan_rpm
+    }))
 def stop_fan():
     global fan_rpm, fan_running, _session_start, _total_runtime, _last_logged_rpm
     stop_motor()
@@ -886,6 +947,11 @@ def stop_fan():
     fan_rpm          = 0.0
     fan_running      = False
     _last_logged_rpm = None
+    
+    mqtt_client.publish(MQTT_TOPIC_STATUS, json.dumps({
+        "running": False,
+        "rpm": 0
+    }))
 # ====================================================================
 # SMART MODE THREAD — chỉ chạy khi smart_active = True
 # ====================================================================
@@ -896,6 +962,8 @@ def smart_fan_thread():
         if not smart_active:
             _last_smart_rpm = None
             continue
+
+        fetch_people_count()
 
         temp = read_temperature()
         if temp is None:
@@ -932,6 +1000,40 @@ def smart_fan_thread():
     _save_stats()
 
 threading.Thread(target=smart_fan_thread, daemon=True).start()
+# ====================================================================
+# ECO REPEAT HELPERS — THÊM MỚI
+# ====================================================================
+
+@app.route('/video_feed')
+def video_feed():
+    if not session.get('logged_in'):
+        return redirect(url_for('login'))
+
+    def proxy_stream():
+        try:
+            r = requests.get(
+                f'{CAMERA_SERVICE_URL}/stream',
+                stream=True, timeout=5
+            )
+            for chunk in r.iter_content(chunk_size=4096):
+                yield chunk
+        except Exception as e:
+            print(f"[PROXY] Camera offline: {e}")
+
+    return Response(
+        proxy_stream(),
+        mimetype='multipart/x-mixed-replace; boundary=frame'
+    )
+
+# ── THÊM ROUTE TRẠNG THÁI CAMERA ──
+@app.route('/camera/status')
+def camera_status():
+    if not session.get('logged_in'):
+        return jsonify({'status': 'error'}), 401
+    return jsonify({
+        'online' : _camera_online,
+        'people' : people_count,
+    })
 # ====================================================================
 # ECO REPEAT HELPERS — THÊM MỚI
 # ====================================================================
@@ -1559,5 +1661,8 @@ if __name__ == '__main__':
         print(f"           → Cổng: {MODBUS_PORT}")
         print(f"           → Baudrate: {BAUDRATE}, Slave ID: {SLAVE_ID}")
         print(f"           → F0-19=2, F0-20=8, F2-17=1, F2-18=0, F2-19=3")
+    
+    print("[STARTUP] MQTT connecting...")
+    start_mqtt()
 
     app.run(host='0.0.0.0', port=5000, debug=False)
