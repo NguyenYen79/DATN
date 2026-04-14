@@ -163,7 +163,8 @@ RTSP_URL = f'rtsp://{CAM_USER}:{CAM_PASS}@{CAM_IP}:554/stream1'
 # ====================================================================
 # CẤU HÌNH BIẾN TẦN
 # ====================================================================
-MODBUS_PORT   = '/dev/ttyACM0'
+# MODBUS_PORT   = '/dev/ttyACM0'
+MODBUS_PORT   = '/dev/ttyUSB0'
 SLAVE_ID      = 1
 BAUDRATE      = 9600
 MAX_FREQ_HZ   = 50.0
@@ -177,7 +178,7 @@ REG_RUN_FREQ  = 0x1003
 # ====================================================================
 # CẤU HÌNH ĐỒNG HỒ ĐIỆN (Modbus RTU - FC03)
 # ====================================================================
-POWER_METER_PORT     = '/dev/ttyUSB0'
+# POWER_METER_PORT     = '/dev/ttyUSB0'
 POWER_METER_SLAVE_ID = 2
 POWER_METER_BAUDRATE = 9600
 POWER_METER_PARITY   = 'E'
@@ -1397,10 +1398,16 @@ def eco_save():
 
     in_schedule = start_min <= now_min < stop_min
 
-    # Dùng fan_running trực tiếp (đã được fix ở run_fan)
     if in_schedule and not fan_running:
         print("[ECO] → Đang trong giờ, BẬT ngay")
         fan_control("start", eco_rpm, source="Eco")
+
+    # ── THÊM: đang trong giờ nhưng RPM sai → cập nhật lại RPM ──
+    elif in_schedule and fan_running and fan_rpm != eco_rpm:
+        print(f"[ECO] → Đang trong giờ, cập nhật RPM: {fan_rpm} → {eco_rpm}")
+        fan_control("start", eco_rpm, source="Eco")
+    # ────────────────────────────────────────────────────────────
+
     elif not in_schedule and fan_running:
         print("[ECO] → Ngoài giờ, TẮT ngay")
         fan_control("stop", source="Eco")

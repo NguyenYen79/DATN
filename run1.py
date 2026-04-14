@@ -11,6 +11,86 @@ import subprocess
 from pytapo import Tapo
 import struct
 import serial
+import json
+import paho.mqtt.client as mqtt
+
+
+# ====================================================================
+# DATA LOGGING
+# ====================================================================
+
+LOG_FILE   = 'data_log.json'
+STATS_FILE = 'stats.json'
+log_lock   = threading.Lock()
+
+# Biến theo dõi
+_session_start    = None   # Thời điểm bắt đầu chạy quạt
+_total_runtime    = 0.0    # Tổng giờ chạy (giờ)
+_temp_sum         = 0.0    # Tổng nhiệt độ để tính TB
+_temp_count       = 0      # Số lần đọc nhiệt độ
+_ai_adjust_count  = 0      # Số lần AI điều chỉnh
+_last_logged_rpm  = None   # RPM lần cuối ghi log
+
+def _load_stats():
+    global _total_runtime, _temp_sum, _temp_count, _ai_adjust_count
+    try:
+        with open(STATS_FILE, 'r') as f:
+            s = json.load(f)
+            _total_runtime   = s.get('total_runtime', 0.0)
+            _temp_sum        = s.get('temp_sum', 0.0)
+            _temp_count      = s.get('temp_count', 0)
+            _ai_adjust_count = s.get('ai_adjust_count', 0)
+    except:
+        pass
+
+def _save_stats():
+    with log_lock:
+        try:
+            with open(STATS_FILE, 'w') as f:
+                json.dump({
+                    'total_runtime'   : round(_total_runtime, 2),
+                    'temp_sum'        : round(_temp_sum, 2),
+                    'temp_count'      : _temp_count,
+                    'ai_adjust_count' : _ai_adjust_count,
+                    'avg_temp'        : round(_temp_sum / _temp_count, 1) if _temp_count > 0 else 0,
+                }, f)
+        except Exception as e:
+            print(f"[LOG] Lỗi lưu stats: {e}")
+
+def log_event(event_type, rpm=None, temp=None, mode=None, people=None):
+    """Ghi 1 sự kiện vào data_log.json"""
+    global _last_logged_rpm
+    with log_lock:
+        try:
+            # Đọc log cũ
+            try:
+                with open(LOG_FILE, 'r') as f:
+                    logs = json.load(f)
+            except:
+                logs = []
+
+            # Thêm sự kiện mới
+            now = datetime.now()
+            entry = {
+                'time'   : datetime.now().strftime('%d/%m %H:%M'),
+                'ts'      : now.timestamp(),
+                'mode'   : mode or current_mode,
+                'temp'   : f"{temp}°C" if temp else '—',
+                'rpm'    : str(int(rpm)) if rpm is not None else '0',
+                'people' : str(people) if people is not None else '—',
+                'event'  : event_type,
+            }
+            logs.append(entry)
+
+            # Chỉ giữ 200 sự kiện gần nhất
+            if len(logs) > 200:
+                logs = logs[-200:]
+
+            with open(LOG_FILE, 'w') as f:
+                json.dump(logs, f, ensure_ascii=False)
+
+        except Exception as e:
+            print(f"[LOG] Lỗi ghi log: {e}")
 # ====================================================================
 # HAILO-8L — import có bảo vệ
 # ====================================================================
@@ -86,7 +166,8 @@ RTSP_URL = f'rtsp://{CAM_USER}:{CAM_PASS}@{CAM_IP}:554/stream1'
 # ====================================================================
 # CẤU HÌNH BIẾN TẦN
 # ====================================================================
-MODBUS_PORT   = '/dev/ttyACM0'
+# MODBUS_PORT   = '/dev/ttyACM0'
+MODBUS_PORT   = '/dev/ttyUSB0'
 SLAVE_ID      = 1
 BAUDRATE      = 9600
 MAX_FREQ_HZ   = 50.0
@@ -100,7 +181,7 @@ REG_RUN_FREQ  = 0x1003
 # ====================================================================
 # CẤU HÌNH ĐỒNG HỒ ĐIỆN (Modbus RTU - FC03)
 # ====================================================================
-POWER_METER_PORT     = '/dev/ttyUSB0'
+# POWER_METER_PORT     = '/dev/ttyUSB0'
 POWER_METER_SLAVE_ID = 2
 POWER_METER_BAUDRATE = 9600
 POWER_METER_PARITY   = 'E'
@@ -163,6 +244,377 @@ def read_power_register(address):
 
 def read_all_power():
     return {key: read_power_register(addr) for key, addr in POWER_REGISTERS.items()}
+
+# ====================================================================
+# MQTT CONFIG
+# ====================================================================
+MQTT_BROKER = "broker.hivemq.com"
+MQTT_PORT   = 1883
+
+MQTT_TOPIC_STATUS  = "smartfan/status"
+MQTT_TOPIC_CONTROL = "smartfan/control"
+
+mqtt_client = mqtt.Client()
+def on_connect(client, userdata, flags, rc):
+    print("[MQTT] Connected:", rc)
+    client.subscribe(MQTT_TOPIC_CONTROL)
+
+def on_message(client, userdata, msg):
+    global fan_running
+
+    try:
+        data = json.loads(msg.payload.decode())
+        print("[MQTT] Nhận:", data)
+
+        if data.get("action") == "stop":
+            fan_control("stop", source="MQTT")
+
+        elif data.get("action") == "start":
+            rpm = data.get("rpm", 33)
+            fan_control("start", rpm, source="MQTT")
+
+    except Exception as e:
+        print("[MQTT] Lỗi:", e)
+
+mqtt_client.on_connect = on_connect
+mqtt_client.on_message = on_message
+
+def start_mqtt():
+    mqtt_client.connect(MQTT_BROKER, MQTT_PORT, 60)
+    mqtt_client.loop_start()
+# ====================================================================
+# SHARED STATE — dict trung tâm cho tất cả dữ liệu realtime
+# ====================================================================
+shared_state = {
+    'rpm'           : 0.0,
+    'hz'            : 0.0,
+    'temp'          : None,
+    'people'        : 0,
+    'voltage'       : None,
+    'current'       : None,
+    'active_power'  : None,
+    'reactive_power': None,
+    'apparent_power': None,
+    'power_factor'  : None,
+    'frequency'     : None,
+    'energy_kwh'    : 0.0,   # tích lũy
+    'uptime_hours'  : 0.0,   # tích lũy
+    'ai_count'      : 0,     # tích lũy
+}
+shared_state_lock = threading.Lock()
+
+# ====================================================================
+# DATA COLLECTOR THREAD — thu thập tất cả dữ liệu thực
+# ====================================================================
+_last_power_update = 0.0   # công tơ đọc chậm hơn (mỗi 5s)
+
+def data_collector_thread():
+    global shared_state, _last_power_update, _temp_sum, _temp_count, _ai_adjust_count
+    _load_stats()   # khôi phục dữ liệu tích lũy khi khởi động
+
+    while True:
+        try:
+            hw_status, hw_hz, hw_rpm = read_hw_status()
+            temp = read_temperature()
+            # ── 1. Nhiệt độ (mỗi 3s) ──
+            temp = read_temperature()
+
+            # ── 2. Biến tần: RPM / Hz thực tế từ hardware ──
+            # if in_schedule and not fan_running_real:
+            #     run_fan(rpm)
+
+            # elif not in_schedule and fan_running_real:
+            #     stop_fan()
+            rpm  = hw_rpm if hw_rpm is not None else fan_rpm
+            hz   = hw_hz  if hw_hz  is not None else rpm_to_hz(fan_rpm)
+            running = fan_running
+
+            # ── 3. Công tơ điện (mỗi 5s, tránh spam RS-485) ──
+            now = time.time()
+            if now - _last_power_update >= 5:
+                pdata = read_all_power()
+                _last_power_update = now
+            else:
+                pdata = {}
+
+            # ── 4. Tích lũy năng lượng (kWh) ──
+            active_p = pdata.get('active_power')
+            if active_p and running:
+                with shared_state_lock:
+                    shared_state['energy_kwh'] += active_p * (3 / 3600)  # 3 giây
+
+            # ── 5. Cập nhật uptime ──
+            if running:
+                with shared_state_lock:
+                    shared_state['uptime_hours'] += 3 / 3600
+
+            # ── 6. Cập nhật stats (nhiệt độ TB, AI count) ──
+            if temp is not None:
+                _temp_sum   += temp
+                _temp_count += 1
+
+            # ── 7. Ghi log định kỳ sự kiện ──
+            _log_periodic(rpm, temp, running)
+
+            # ── 8. Cập nhật shared_state ──
+            with shared_state_lock:
+                shared_state.update({
+                    'rpm'     : round(rpm, 1) if rpm else 0,
+                    'hz'      : round(hz, 2)  if hz  else 0,
+                    'temp'    : temp,
+                    'people'  : people_count,
+                    'uptime_hours': shared_state['uptime_hours'],
+                    'ai_count': _ai_adjust_count,
+                    **pdata,
+                })
+
+            # ── 9. Lưu stats định kỳ mỗi 60s ──
+            if int(now) % 60 == 0:
+                _save_stats_extended()
+
+        except Exception as e:
+            print(f"[COLLECTOR] Lỗi: {e}")
+
+        time.sleep(3)
+
+_last_logged_rpm_periodic = None
+_last_log_time = 0.0
+
+def _log_periodic(rpm, temp, running):
+    """Ghi log khi trạng thái thay đổi đáng kể."""
+    global _last_logged_rpm_periodic, _last_log_time
+    now = time.time()
+    rpm_int = int(round(rpm)) if rpm else 0
+
+    # Ghi log khi RPM thay đổi HOẶC mỗi 5 phút
+    if rpm_int != _last_logged_rpm_periodic or (now - _last_log_time) >= 300:
+        event = "Đang chạy" if running else "Dừng"
+        if rpm_int != _last_logged_rpm_periodic and running:
+            event = f"Tốc độ thay đổi → {rpm_int} RPM"
+        if not running:
+            return
+        _last_logged_rpm_periodic = rpm_int
+        _last_log_time = now
+        log_event(event, rpm=rpm_int, temp=temp,
+                  people=people_count if smart_active else None)
+
+def _save_stats_extended():
+    """Lưu stats đầy đủ ra file."""
+    with log_lock:
+        try:
+            with shared_state_lock:
+                ss = dict(shared_state)
+            with open(STATS_FILE, 'w') as f:
+                json.dump({
+                    'total_runtime'   : round(ss['uptime_hours'], 2),
+                    'temp_sum'        : round(_temp_sum, 2),
+                    'temp_count'      : _temp_count,
+                    'ai_adjust_count' : _ai_adjust_count,
+                    'avg_temp'        : round(_temp_sum / _temp_count, 1) if _temp_count else 0,
+                    'energy_kwh'      : round(ss['energy_kwh'], 3),
+                }, f)
+        except Exception as e:
+            print(f"[STATS] Lỗi lưu: {e}")
+
+# Khởi động thread mới (thay thế data_logger_thread cũ)
+threading.Thread(target=data_collector_thread, daemon=True).start()
+
+# ====================================================================
+# ROUTE /power_meter — trả dữ liệu thực từ shared_state
+# ====================================================================
+@app.route('/power_meter')
+def power_meter():
+    if not session.get('logged_in'):
+        return jsonify({'status': 'error'}), 401
+
+    with shared_state_lock:
+        ss = dict(shared_state)
+
+    if ss.get('voltage') is None:
+        return jsonify({'status': 'offline'})
+
+    return jsonify({
+        'status'        : 'ok',
+        'voltage'       : ss.get('voltage'),
+        'current'       : ss.get('current'),
+        'active_power'  : ss.get('active_power'),
+        'reactive_power': ss.get('reactive_power'),
+        'apparent_power': ss.get('apparent_power'),
+        'power_factor'  : ss.get('power_factor'),
+        'frequency'     : ss.get('frequency'),
+    })
+
+# ====================================================================
+# ROUTE /report/data — dữ liệu thực cho trang Báo cáo
+# ====================================================================
+@app.route('/report/data')
+def report_data():
+    if not session.get('logged_in'):
+        return jsonify({'status': 'error'}), 401
+    try:
+        with open(STATS_FILE, 'r') as f:
+            stats = json.load(f)
+    except:
+        stats = {}
+
+    with shared_state_lock:
+        ss = dict(shared_state)
+
+    # Uptime: file + phiên hiện tại
+    saved_h  = stats.get('total_runtime', 0) + ss.get('uptime_hours', 0)
+    h = int(saved_h)
+    m = int((saved_h - h) * 60)
+
+    avg_temp   = stats.get('avg_temp', 0) or 0
+    energy     = stats.get('energy_kwh', 0) or ss.get('energy_kwh', 0)
+    ai_count   = stats.get('ai_adjust_count', 0) or ss.get('ai_count', 0)
+
+    # Biểu đồ 24h: đọc từ log
+    chart = _build_chart_data('today')
+
+    return jsonify({
+        'status'          : 'ok',
+        'total_runtime'   : f"{h} giờ {m} phút",
+        'avg_temp'        : round(avg_temp, 1),
+        'ai_adjust_count' : ai_count,
+        'energy_kwh'      : round(energy, 3),
+        'current_rpm'     : ss.get('rpm', 0),
+        'current_temp'    : ss.get('temp'),
+        'chart'           : chart,
+    })
+
+def _build_chart_data(period):
+    """Tổng hợp dữ liệu chart từ log JSON theo kỳ."""
+    try:
+        with open(LOG_FILE, 'r') as f:
+            logs = json.load(f)
+    except:
+        return {'labels': [], 'temps': [], 'rpms': []}
+
+    now = datetime.now()
+
+    if period == 'today':
+        # Nhóm theo giờ trong ngày hôm nay
+        buckets = {h: {'temps': [], 'rpms': []} for h in range(0, 24, 2)}
+        for entry in logs:
+            try:
+                ts = entry.get('ts')
+
+                if ts:
+                    t = datetime.fromtimestamp(ts)
+                else:
+                    t = datetime.strptime(entry['time'], '%d/%m %H:%M')
+    t = t.replace(year=datetime.now().year)
+                if t.date() == now.date():
+                    bucket = (t.hour // 2) * 2
+                    temp = float(entry['temp'].replace('°C', '')) if entry['temp'] != '—' else None
+                    rpm  = int(entry['rpm']) if entry['rpm'] else 0
+                    if temp: buckets[bucket]['temps'].append(temp)
+                    buckets[bucket]['rpms'].append(rpm)
+            except:
+                pass
+        labels = [f"{h}h" for h in range(0, 24, 2)]
+        temps  = [round(sum(v['temps'])/len(v['temps']), 1) if v['temps'] else None for v in buckets.values()]
+        rpms   = [round(sum(v['rpms'])/len(v['rpms']))      if v['rpms']  else 0    for v in buckets.values()]
+        return {'labels': labels, 'temps': temps, 'rpms': rpms}
+
+    elif period == '7day':
+        buckets = {}
+        for i in range(7):
+            from datetime import timedelta
+            d = (now - timedelta(days=6-i)).strftime('%d/%m')
+            buckets[d] = {'temps': [], 'rpms': []}
+        for entry in logs:
+            try:
+                key = entry['time'][:5]
+                if key in buckets:
+                    temp = float(entry['temp'].replace('°C', '')) if entry['temp'] != '—' else None
+                    rpm  = int(entry['rpm']) if entry['rpm'] else 0
+                    if temp: buckets[key]['temps'].append(temp)
+                    buckets[key]['rpms'].append(rpm)
+            except:
+                pass
+        return {
+            'labels': list(buckets.keys()),
+            'temps' : [round(sum(v['temps'])/len(v['temps']),1) if v['temps'] else None for v in buckets.values()],
+            'rpms'  : [round(sum(v['rpms'])/len(v['rpms']))     if v['rpms']  else 0    for v in buckets.values()],
+        }
+
+    return {'labels': [], 'temps': [], 'rpms': []}
+
+# ====================================================================
+# ROUTE /report/history — lịch sử thực từ data_log.json
+# ====================================================================
+@app.route('/report/history')
+def report_history():
+    if not session.get('logged_in'):
+        return jsonify({'status': 'error'}), 401
+    try:
+        with open(LOG_FILE, 'r') as f:
+            logs = json.load(f)
+        return jsonify({'status': 'ok', 'events': list(reversed(logs[-100:]))})
+    except:
+        return jsonify({'status': 'ok', 'events': []})
+
+# ====================================================================
+# ROUTE /history/period — lọc theo kỳ (1m/2m/3m)
+# ====================================================================
+@app.route('/history/period/<period>')
+def history_period(period):
+    if not session.get('logged_in'):
+        return jsonify({'status': 'error'}), 401
+
+    months = {'1m': 1, '2m': 2, '3m': 3}.get(period, 1)
+    cutoff = datetime.now().replace(day=1).replace(
+        month=((datetime.now().month - months - 1) % 12) + 1
+    )
+
+    try:
+        with open(LOG_FILE, 'r') as f:
+            logs = json.load(f)
+    except:
+        logs = []
+
+    # Lọc theo kỳ
+    filtered = []
+    for entry in logs:
+        try:
+            ts = entry.get('ts')
+
+            if ts:
+                t = datetime.fromtimestamp(ts)
+            else:
+                t = datetime.strptime(entry['time'], '%d/%m %H:%M')
+                t = t.replace(year=datetime.now().year)
+            if t >= cutoff:
+                filtered.append(entry)
+        except:
+            filtered.append(entry)  # giữ lại nếu không parse được
+
+    # Tính tổng kết
+    temps  = [float(e['temp'].replace('°C','')) for e in filtered if e['temp'] != '—']
+    rpms   = [int(e['rpm']) for e in filtered if e['rpm'] and e['rpm'] != '0']
+    ai_ev  = [e for e in filtered if e.get('mode') == 'SMART']
+
+    # Uptime: đếm số sự kiện × 5 phút (ước tính)
+    uptime_h = round(len(filtered) * 5 / 60, 1)
+
+    # Energy: đọc từ stats
+    try:
+        with open(STATS_FILE, 'r') as f:
+            stats = json.load(f)
+        energy = stats.get('energy_kwh', 0)
+    except:
+        energy = 0
+
+    return jsonify({
+        'status'  : 'ok',
+        'energy'  : f"{energy:.3f} kWh",
+        'avgtemp' : f"{round(sum(temps)/len(temps),1) if temps else 0} °C",
+        'uptime'  : f"{uptime_h} giờ",
+        'aicount' : f"{len(ai_ev)} lần",
+        'events'  : list(reversed(filtered[-50:])),
+    })
 
 # ── SMART MODE: ngưỡng NHIỆT ĐỘ → mức tốc độ ────────────────────────
 TEMP_THRESHOLD_DEFAULT = [
@@ -315,9 +767,9 @@ def modbus_connect(retries=3):
             client = ModbusSerialClient(
                 port=MODBUS_PORT, baudrate=BAUDRATE,
                 bytesize=8, parity='N', stopbits=1,
-                timeout=2,          # ← tăng từ 1 lên 2
+                timeout=0.3,       
                 retry_on_empty=True,
-                retries=2,
+                retries=0,
             )
             if client.connect():
                 modbus_ok = True
@@ -397,6 +849,30 @@ def hz_to_rpm(hz):   return float(hz) * 2.0
 def val_to_hz(v):    return round((v / 10000) * MAX_FREQ_HZ, 1)
 
 # ====================================================================
+# FAN CONTROL LAYER — LỚP ĐIỀU KHIỂN TRUNG TÂM
+# ====================================================================
+def fan_control(action, rpm=None, source="unknown"):
+    """
+    Hàm duy nhất điều khiển bật/tắt quạt cho toàn hệ thống
+    Manual / Smart / Eco đều phải đi qua đây
+    """
+
+    try:
+        if action == "start":
+            if rpm is None:
+                rpm = fan_rpm or 33.0
+            print(f"[FAN CTRL] ▶ START từ {source} | {rpm} RPM")
+            return run_fan(rpm)
+
+        elif action == "stop":
+            print(f"[FAN CTRL] ⏹ STOP từ {source}")
+            return stop_fan()
+
+    except Exception as e:
+        print(f"[FAN CTRL] ❌ Lỗi: {e}")
+        return False
+
+# ====================================================================
 # ĐIỀU KHIỂN BIẾN TẦN
 # ====================================================================
 def set_speed_rpm(rpm):
@@ -407,9 +883,6 @@ def set_speed_rpm(rpm):
     return False
 
 def start_motor():
-    # Thử gửi lại lệnh RUN nhiều lần hoặc kiểm tra giá trị chính xác
-    # Đối với 1 số biến tần, giá trị 1 là RUN, 6 là STOP. 
-    # Nhưng hãy thử giá trị 0x0001 (Decimal 1)
     r = _write(REG_COMMAND, 1) 
     if not r.isError(): 
         print("[FAN] SENT START COMMAND"); return True
@@ -429,30 +902,51 @@ def read_hw_status():
     return None, None, None
 
 def run_fan(rpm):
-    global fan_rpm, fan_running
+    global fan_rpm, fan_running, _session_start, _last_logged_rpm
     rpm = max(0.0, min(float(rpm), MAX_RPM))
 
-    with fan_lock:
-        ok_freq = set_speed_rpm(rpm)
-        time.sleep(0.3)
-        ok_run = start_motor()
-        # ← BỎ lệnh start_motor() lần 2
+    if not modbus_ok:
+        modbus_connect()
 
-        if ok_freq and ok_run:
-            fan_rpm     = rpm
-            fan_running = True
-            return True
+    ok_freq = set_speed_rpm(rpm)
+    time.sleep(0.3)
+    ok_run  = start_motor()
 
-        # Nếu thất bại, fan_running vẫn = False → eco thread sẽ thử lại
-        return False
+    # Set trạng thái NGAY, không phụ thuộc Modbus thành công hay không
+    fan_rpm     = rpm
+    fan_running = True
+
+    if _session_start is None:
+        _session_start = time.time()
+    if rpm != _last_logged_rpm:
+        _last_logged_rpm = rpm
+        temp = read_temperature()
+        log_event(f"Bật quạt {int(rpm)} RPM", rpm=rpm, temp=temp,
+                  people=people_count if smart_active else None)
+
+    return ok_run
+    mqtt_client.publish(MQTT_TOPIC_STATUS, json.dumps({
+        "running": True,
+        "rpm": fan_rpm
+    }))
 def stop_fan():
-    """Tắt quạt — dùng chung cho mọi chế độ"""
-    global fan_rpm, fan_running
-    with fan_lock:
-        stop_motor()
-        fan_rpm     = 0.0
-        fan_running = False
-
+    global fan_rpm, fan_running, _session_start, _total_runtime, _last_logged_rpm
+    stop_motor()
+    # Tính thời gian chạy
+    if _session_start is not None:
+        _total_runtime += (time.time() - _session_start) / 3600
+        _session_start  = None
+        _save_stats()
+    temp = read_temperature()
+    log_event("Tắt quạt", rpm=0, temp=temp)
+    fan_rpm          = 0.0
+    fan_running      = False
+    _last_logged_rpm = None
+    
+    mqtt_client.publish(MQTT_TOPIC_STATUS, json.dumps({
+        "running": False,
+        "rpm": 0
+    }))
 # ====================================================================
 # SMART MODE THREAD — chỉ chạy khi smart_active = True
 # ====================================================================
@@ -487,53 +981,89 @@ def smart_fan_thread():
 
         if rpm != _last_smart_rpm:
             print(f"[SMART] {temp}°C | {people_count} người → {rpm} RPM")
-            run_fan(rpm)
+            fan_control("start", rpm, source="Smart")
             _last_smart_rpm = rpm
+    # Cập nhật stats
+    global _temp_sum, _temp_count, _ai_adjust_count
+    if temp is not None:
+        _temp_sum   += temp
+        _temp_count += 1
+    if rpm != _last_smart_rpm:
+        _ai_adjust_count += 1
+    _save_stats()
 
 threading.Thread(target=smart_fan_thread, daemon=True).start()
+# ====================================================================
+# ECO REPEAT HELPERS — THÊM MỚI
+# ====================================================================
+def _eco_is_active_today():
+    if eco_schedule is None:
+        return False
+    repeat = eco_schedule.get('repeat', 'once')
+    today  = datetime.now().weekday()  # 0=T2 … 6=CN
+
+    if repeat == 'once':
+        run_date = eco_schedule.get('run_date')
+        if run_date is None:
+            return True
+        return datetime.now().strftime('%Y-%m-%d') == run_date
+
+    elif repeat == 'weekly':
+        return True
+
+    elif repeat == 'custom':
+        days = eco_schedule.get('days', [])
+        return today in days
+
+    return False
+
+
+def _eco_cleanup_once():
+    global eco_schedule
+    if eco_schedule and eco_schedule.get('repeat') == 'once':
+        now_min  = datetime.now().hour * 60 + datetime.now().minute
+        eh, em   = map(int, eco_schedule['stop'].split(':'))
+        stop_min = eh * 60 + em
+        if now_min >= stop_min:
+            print("[ECO] Lịch 'một lần' đã hoàn thành — xoá lịch")
+            eco_schedule = None
 
 # ====================================================================
 # ECO SCHEDULE THREAD — chỉ chạy khi eco_schedule != None
 # ====================================================================
 def eco_schedule_thread():
     while True:
-        time.sleep(5)
+        time.sleep(1)
         try:
-            # Log trạng thái mỗi lần check
-            print(f"[ECO-DEBUG] mode={current_mode} | eco_schedule={eco_schedule} | "
-                  f"smart_active={smart_active} | fan_running={fan_running} | "
-                  f"timer_override={timer_override}")
-
-            if eco_schedule is None or current_mode != 'Eco':
+            if eco_schedule is None:
                 continue
             if smart_active:
                 continue
             if timer_override:
                 continue
 
+            # ── THÊM: kiểm tra hôm nay có trong lịch không ──
+            if not _eco_is_active_today():
+                if fan_running:
+                    fan_control("stop", source="Eco")
+                continue
+            # ─────────────────────────────────────────────────
+
             now_dt  = datetime.now()
             now_min = now_dt.hour * 60 + now_dt.minute
-
-            sh, sm = map(int, eco_schedule['start'].split(':'))
-            eh, em = map(int, eco_schedule['stop'].split(':'))
+            sh, sm  = map(int, eco_schedule['start'].split(':'))
+            eh, em  = map(int, eco_schedule['stop'].split(':'))
             start_min = sh * 60 + sm
             stop_min  = eh * 60 + em
             rpm       = eco_schedule.get('rpm', 33)
-
             in_schedule = start_min <= now_min < stop_min
 
-            print(f"[ECO-DEBUG] now={now_min}ph | start={start_min}ph | "
-                  f"stop={stop_min}ph | in_schedule={in_schedule}")
-
             if in_schedule and not fan_running:
-                print(f"[ECO] → BẬT quạt {rpm} RPM")
-                run_fan(rpm)
+                fan_control("start", rpm, source="Eco")
             elif not in_schedule and fan_running:
-                print(f"[ECO] → TẮT quạt")
-                stop_fan()
-            else:
-                print(f"[ECO-DEBUG] Không làm gì — "
-                      f"in_schedule={in_schedule}, fan_running={fan_running}")
+                fan_control("stop", source="Eco")
+                # ── THÊM: dọn lịch 'once' sau khi hết giờ ──
+                _eco_cleanup_once()
 
         except Exception as e:
             print(f"[ECO] Lỗi thread: {e}")
@@ -642,6 +1172,9 @@ def _overlay_text(frame):
 def _encode(frame):
     _, buf = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 95])
     return b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + buf.tobytes() + b'\r\n'
+
+
+
 # ====================================================================
 # ROUTES — XÁC THỰC
 # ====================================================================
@@ -664,7 +1197,9 @@ def logout():
     session.clear()
     return redirect(url_for('login'))
 
-# Thêm vào run1.py
+# ====================================================================
+# ROUTES — thêm index vào file
+# ====================================================================
 @app.route('/')
 def index():
     if not session.get('logged_in'):
@@ -678,7 +1213,7 @@ def index():
     ])
     
     template = 'mobile.html' if is_mobile else 'index.html'
-    
+    # ── gọi file index.html ──
     return render_template(template,
                            username=session.get('username'),
                            role=session.get('role', 'viewer'))
@@ -767,7 +1302,7 @@ def smart_start():
                 if temp <= thr:
                     rpm = r
                     break
-        run_fan(rpm)
+        fan_control("start", rpm, source="Smart")
         print(f"[SMART] Bắt đầu: {temp}°C → {rpm} RPM")
 
     threading.Thread(target=_start, daemon=True).start()
@@ -782,7 +1317,10 @@ def smart_stop():
     _last_smart_rpm = None
 
     # Chạy trong thread riêng
-    threading.Thread(target=stop_fan, daemon=True).start()
+    threading.Thread(
+        target=lambda: fan_control("stop", source="Smart"),
+        daemon=True
+    ).start()
     return jsonify({'status': 'ok', 'smart_active': False})
 
 @app.route('/people_count')
@@ -797,14 +1335,14 @@ def fan_set_rpm():
     if not session.get('logged_in'):
         return jsonify({'status': 'error'}), 401
     rpm = float(request.get_json().get('rpm', 0))
-    run_fan(rpm)
+    fan_control("start", rpm, source="Manual")
     return jsonify({'status':'ok', 'rpm':fan_rpm, 'hz':rpm_to_hz(fan_rpm), 'modbus':modbus_ok})
 
 @app.route('/fan/stop', methods=['POST'])
 def fan_stop_route():
     if not session.get('logged_in'):
         return jsonify({'status': 'error'}), 401
-    stop_fan()
+    fan_control("stop", source="Manual")
     return jsonify({'status': 'ok', 'rpm': 0, 'hz': 0, 'modbus': modbus_ok})
 
 @app.route('/fan/status')
@@ -812,8 +1350,10 @@ def fan_status():
     if not session.get('logged_in'):
         return jsonify({'status': 'error'}), 401
 
-    _, hw_hz, hw_rpm = read_hw_status()
-
+    _, _hw_hz, _hw_rpm = read_hw_status()
+    fan_running_real = (_hw_rpm or 0) > 0
+    hw_rpm = _hw_rpm if (_hw_rpm is not None and _hw_rpm > 0) else fan_rpm
+    hw_hz  = _hw_hz  if (_hw_hz  is not None and _hw_hz  > 0) else rpm_to_hz(fan_rpm)
     # Đọc nhiệt độ và tính level theo ngưỡng người dùng cài đặt
     temp  = read_temperature()
     level = 'Không có cảm biến'
@@ -885,6 +1425,7 @@ def eco_save():
     global eco_schedule
     if not session.get('logged_in'):
         return jsonify({'status': 'error'}), 401
+
     data = request.get_json()
 
     def to_24h(h, m, ap):
@@ -896,10 +1437,19 @@ def eco_save():
     start   = to_24h(data['start_h'], data['start_m'], data['start_ap'])
     stop    = to_24h(data['stop_h'],  data['stop_m'],  data['stop_ap'])
     eco_rpm = int(data.get('rpm', 33))
-    eco_schedule = {'start': start, 'stop': stop, 'rpm': eco_rpm}
+
+    eco_schedule = {
+        'start'    : start,
+        'stop'     : stop,
+        'rpm'      : eco_rpm,
+        # ── THÊM 3 DÒNG NÀY ──
+        'repeat'   : data.get('repeat', 'once'),
+        'days'     : data.get('days', []),
+        'run_date' : datetime.now().strftime('%Y-%m-%d'),
+    }
     print(f"[ECO] Lịch trình đã lưu: BẬT {start} — TẮT {stop} | {eco_rpm} RPM")
 
-    # Xử lý ngay khi lưu — không chờ thread
+    # Kiểm tra ngay khi lưu
     now_dt  = datetime.now()
     now_min = now_dt.hour * 60 + now_dt.minute
     sh, sm  = map(int, start.split(':'))
@@ -909,19 +1459,26 @@ def eco_save():
 
     in_schedule = start_min <= now_min < stop_min
 
-    if in_schedule:
-        print(f"[ECO] Đang trong khung giờ → BẬT quạt {eco_rpm} RPM")
-        run_fan(eco_rpm)
-    else:
-        print(f"[ECO] Ngoài khung giờ → TẮT quạt")
-        stop_fan()
+    if in_schedule and not fan_running:
+        print("[ECO] → Đang trong giờ, BẬT ngay")
+        fan_control("start", eco_rpm, source="Eco")
+
+    # ── THÊM: đang trong giờ nhưng RPM sai → cập nhật lại RPM ──
+    elif in_schedule and fan_running and fan_rpm != eco_rpm:
+        print(f"[ECO] → Đang trong giờ, cập nhật RPM: {fan_rpm} → {eco_rpm}")
+        fan_control("start", eco_rpm, source="Eco")
+    # ────────────────────────────────────────────────────────────
+
+    elif not in_schedule and fan_running:
+        print("[ECO] → Ngoài giờ, TẮT ngay")
+        fan_control("stop", source="Eco")
 
     return jsonify({
         'status'     : 'ok',
         'start'      : start,
         'stop'       : stop,
         'in_schedule': in_schedule,
-        'fan_running': fan_running
+        'fan_running': fan_running,
     })
 
 @app.route('/eco/cancel', methods=['POST'])
@@ -930,7 +1487,7 @@ def eco_cancel():
     if not session.get('logged_in'):
         return jsonify({'status': 'error'}), 401
     eco_schedule = None
-    stop_fan()
+    fan_control("stop", source="Eco")
     print("[ECO] Đã hủy lịch trình — tắt quạt")
     return jsonify({'status': 'ok'})
 
@@ -986,16 +1543,19 @@ def eco_timer_override():
         return jsonify({'status': 'error'}), 401
     data = request.get_json()
     timer_override = bool(data.get('active', False))
+    eco_schedule = new_data
+    check_eco_now()   # ← cực kỳ quan trọng
     print(f"[TIMER] Override: {timer_override}")
     return jsonify({'status': 'ok', 'timer_override': timer_override})
 
 # ====================================================================
 # ROUTE — ĐỒNG HỒ ĐIỆN
 # ====================================================================
-@app.route('/power_meter')
-def power_meter():
+@app.route('/power_meter/raw')
+def power_meter_raw():
     if not session.get('logged_in'):
         return jsonify({'status': 'error'}), 401
+
     data = read_all_power()
     return jsonify({'status': 'ok', **data})
 
@@ -1060,5 +1620,8 @@ if __name__ == '__main__':
         print(f"           → Cổng: {MODBUS_PORT}")
         print(f"           → Baudrate: {BAUDRATE}, Slave ID: {SLAVE_ID}")
         print(f"           → F0-19=2, F0-20=8, F2-17=1, F2-18=0, F2-19=3")
+    
+    print("[STARTUP] MQTT connecting...")
+    start_mqtt()
 
     app.run(host='0.0.0.0', port=5000, debug=False)

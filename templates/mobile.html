@@ -1439,6 +1439,11 @@ async function fanOff() {
         updateFanStatusBar('off');
     } catch(e) {}
 }
+fetch('/eco/timer_override', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({active: false})
+});
 
 function updateFanUI(rpm, hz, running) {
     rpm = parseFloat(rpm) || 0;
@@ -1490,6 +1495,11 @@ setInterval(async () => {
         const res  = await fetch('/fan/status');
         const data = await res.json();
         updateFanUI(data.rpm, data.hz, data.running);
+        if (data.running && data.rpm > 0) {
+            updateFanStatusBar('on');
+        } else {
+            updateFanStatusBar('off');
+        }
         if (!data.ai_mode && !sliderDragging)
             document.getElementById('rpm-slider').value = Math.round(data.rpm);
         if (data.smart_active && data.people !== null) {
@@ -1612,8 +1622,10 @@ function cancelSmart() {
 }
 
 // ── ECO ───────────────────────────────────────────────
-let ecoSpeed = 33;
-function setEcoSpeed(rpm) { ecoSpeed = rpm; }
+function setEcoSpeed(rpm) {
+    ecoSpeed = rpm;
+    document.getElementById('eco-speed-label').innerText = rpm + ' RPM';
+}
 function setMobileRepeatMode(mode) {
     const daysDiv = document.getElementById('m-repeat-days');
     const summary = document.getElementById('m-repeat-summary');
@@ -2174,18 +2186,13 @@ async function exportExcel() {
 
 // ══════════════════════════════════════════════════════
 window.onload = function() {
-    const slider = document.getElementById('rpm-slider');
-    if (slider) {
-        slider.addEventListener('mousedown',  () => { sliderDragging = true; });
-        slider.addEventListener('touchstart', () => { sliderDragging = true; });
-        slider.addEventListener('mouseup',    () => { sliderDragging = false; });
-        slider.addEventListener('touchend',   () => { sliderDragging = false; });
-    }
+    
     applyTheme();
     updateTime();
     generateTimeOptions();
     startHLSStream();
-    updateFanStatusBar('off');
+    
+    
 
     // Phân quyền viewer
     if (USER_ROLE !== 'admin') {
