@@ -272,6 +272,8 @@ def data_collector_thread():
 
     while True:
         try:
+            hw_status, hw_hz, hw_rpm = read_hw_status()
+            temp = read_temperature()
             # ── 1. Nhiệt độ (mỗi 3s) ──
             temp = read_temperature()
 
@@ -828,9 +830,6 @@ def set_speed_rpm(rpm):
     return False
 
 def start_motor():
-    # Thử gửi lại lệnh RUN nhiều lần hoặc kiểm tra giá trị chính xác
-    # Đối với 1 số biến tần, giá trị 1 là RUN, 6 là STOP. 
-    # Nhưng hãy thử giá trị 0x0001 (Decimal 1)
     r = _write(REG_COMMAND, 1) 
     if not r.isError(): 
         print("[FAN] SENT START COMMAND"); return True
@@ -932,6 +931,40 @@ def smart_fan_thread():
     _save_stats()
 
 threading.Thread(target=smart_fan_thread, daemon=True).start()
+# ====================================================================
+# ECO REPEAT HELPERS — THÊM MỚI
+# ====================================================================
+def _eco_is_active_today():
+    if eco_schedule is None:
+        return False
+    repeat = eco_schedule.get('repeat', 'once')
+    today  = datetime.now().weekday()  # 0=T2 … 6=CN
+
+    if repeat == 'once':
+        run_date = eco_schedule.get('run_date')
+        if run_date is None:
+            return True
+        return datetime.now().strftime('%Y-%m-%d') == run_date
+
+    elif repeat == 'weekly':
+        return True
+
+    elif repeat == 'custom':
+        days = eco_schedule.get('days', [])
+        return today in days
+
+    return False
+
+
+def _eco_cleanup_once():
+    global eco_schedule
+    if eco_schedule and eco_schedule.get('repeat') == 'once':
+        now_min  = datetime.now().hour * 60 + datetime.now().minute
+        eh, em   = map(int, eco_schedule['stop'].split(':'))
+        stop_min = eh * 60 + em
+        if now_min >= stop_min:
+            print("[ECO] Lịch 'một lần' đã hoàn thành — xoá lịch")
+            eco_schedule = None
 
 # ====================================================================
 # ECO SCHEDULE THREAD — chỉ chạy khi eco_schedule != None
@@ -940,11 +973,6 @@ def eco_schedule_thread():
     while True:
         time.sleep(1)
         try:
-            # Log trạng thái mỗi lần check
-            print(f"[ECO-DEBUG] mode={current_mode} | eco_schedule={eco_schedule} | "
-                  f"smart_active={smart_active} | fan_running={fan_running} | "
-                  f"timer_override={timer_override}")
-
             if eco_schedule is None:
                 continue
             if smart_active:
@@ -952,29 +980,28 @@ def eco_schedule_thread():
             if timer_override:
                 continue
 
+            # ── THÊM: kiểm tra hôm nay có trong lịch không ──
+            if not _eco_is_active_today():
+                if fan_running:
+                    fan_control("stop", source="Eco")
+                continue
+            # ─────────────────────────────────────────────────
+
             now_dt  = datetime.now()
             now_min = now_dt.hour * 60 + now_dt.minute
-
-            sh, sm = map(int, eco_schedule['start'].split(':'))
-            eh, em = map(int, eco_schedule['stop'].split(':'))
+            sh, sm  = map(int, eco_schedule['start'].split(':'))
+            eh, em  = map(int, eco_schedule['stop'].split(':'))
             start_min = sh * 60 + sm
             stop_min  = eh * 60 + em
             rpm       = eco_schedule.get('rpm', 33)
-
             in_schedule = start_min <= now_min < stop_min
 
-            print(f"[ECO-DEBUG] now={now_min}ph | start={start_min}ph | "
-                  f"stop={stop_min}ph | in_schedule={in_schedule}")
-
             if in_schedule and not fan_running:
-                print(f"[ECO] → BẬT quạt {rpm} RPM")
                 fan_control("start", rpm, source="Eco")
             elif not in_schedule and fan_running:
-                print(f"[ECO] → TẮT quạt")
                 fan_control("stop", source="Eco")
-            else:
-                print(f"[ECO-DEBUG] Không làm gì — "
-                      f"in_schedule={in_schedule}, fan_running={fan_running}")
+                # ── THÊM: dọn lịch 'once' sau khi hết giờ ──
+                _eco_cleanup_once()
 
         except Exception as e:
             print(f"[ECO] Lỗi thread: {e}")
@@ -1108,7 +1135,9 @@ def logout():
     session.clear()
     return redirect(url_for('login'))
 
-# Thêm vào run1.py
+# ====================================================================
+# ROUTES — thêm index vào file
+# ====================================================================
 @app.route('/')
 def index():
     if not session.get('logged_in'):
@@ -1122,7 +1151,7 @@ def index():
     ])
     
     template = 'mobile.html' if is_mobile else 'index.html'
-    
+    # ── gọi file index.html ──
     return render_template(template,
                            username=session.get('username'),
                            role=session.get('role', 'viewer'))
@@ -1347,7 +1376,15 @@ def eco_save():
     stop    = to_24h(data['stop_h'],  data['stop_m'],  data['stop_ap'])
     eco_rpm = int(data.get('rpm', 33))
 
-    eco_schedule = {'start': start, 'stop': stop, 'rpm': eco_rpm}
+    eco_schedule = {
+        'start'    : start,
+        'stop'     : stop,
+        'rpm'      : eco_rpm,
+        # ── THÊM 3 DÒNG NÀY ──
+        'repeat'   : data.get('repeat', 'once'),
+        'days'     : data.get('days', []),
+        'run_date' : datetime.now().strftime('%Y-%m-%d'),
+    }
     print(f"[ECO] Lịch trình đã lưu: BẬT {start} — TẮT {stop} | {eco_rpm} RPM")
 
     # Kiểm tra ngay khi lưu

@@ -1641,49 +1641,64 @@ function generateTimeOptions() {
 
 async function saveEco() {
     if (USER_ROLE !== 'admin') { alert('⚠️ Bạn chỉ có quyền xem!'); return; }
+    const msg = document.getElementById('eco-save-msg');
+    msg.style.display = 'flex';
+    setTimeout(() => { msg.style.display = 'none'; }, 1000);
 
-    const body = {
-        start_h:  document.getElementById('s-h').value,
-        start_m:  document.getElementById('s-m').value,
-        start_ap: document.getElementById('s-ap').value,
-        stop_h:   document.getElementById('e-h').value,
-        stop_m:   document.getElementById('e-m').value,
-        stop_ap:  document.getElementById('e-ap').value,
-        rpm: ecoSpeed
-    };
+    updateFanStatusBar('turning_on');
 
-    try {
-        const res  = await fetch('/eco/save', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(body)
+    // ── ĐỌC CHẾ ĐỘ LẶP LẠI ──
+    const repeatMode = document.querySelector('input[name="repeat-mode"]:checked')?.value || 'once';
+
+    // ── ĐỌC CÁC NGÀY ĐÃ CHỌN (chỉ khi custom) ──
+    const DAY_MAP = { mon:0, tue:1, wed:2, thu:3, fri:4, sat:5, sun:6 };
+    const selectedDays = [];
+    if (repeatMode === 'custom') {
+        document.querySelectorAll('#repeat-days input[type="checkbox"]:checked').forEach(cb => {
+            if (DAY_MAP[cb.value] !== undefined) selectedDays.push(DAY_MAP[cb.value]);
         });
-        const data = await res.json();
+    }
 
-        // Hiện thông báo lưu thành công
-        const msg = document.getElementById('eco-save-msg');
-        msg.classList.remove('hidden'); msg.style.display = 'flex';
-        setTimeout(() => { msg.classList.add('hidden'); msg.style.display = 'none'; }, 2000);
+    // ── MAP 'daily' → 'weekly' cho backend ──
+    // Frontend dùng 'daily', backend dùng 'weekly' (chạy tất cả các ngày)
+    const repeatBackend = repeatMode === 'daily' ? 'weekly' : repeatMode;
 
-        // Cập nhật UI dựa trên kết quả thực từ server
-        if (data.in_schedule) {
-            updateFanStatusBar('on');
-        } else {
-            updateFanStatusBar('off');
-        }
+    fetch('/eco/save', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            start_h  : document.getElementById('s-h').value,
+            start_m  : document.getElementById('s-m').value,
+            start_ap : document.getElementById('s-ap').value,
+            stop_h   : document.getElementById('e-h').value,
+            stop_m   : document.getElementById('e-m').value,
+            stop_ap  : document.getElementById('e-ap').value,
+            rpm      : ecoSpeed,
+            // ── THÊM 2 FIELD MỚI ──
+            repeat   : repeatBackend,
+            days     : selectedDays
+        })
+    }).then(r => r.json()).then(data => {
+        updateFanStatusBar('on');
+        // Cập nhật summary badge trong menu
+        updateRepeatSummary(repeatMode, selectedDays);
+    }).catch(e => {});
+}
 
-        // Poll ngay lập tức để đồng bộ UI
-        setTimeout(async () => {
-            try {
-                const r = await fetch('/fan/status');
-                const d = await r.json();
-                updateFanUI(d.rpm, d.hz, d.running);
-                updateFanStatusBar(d.running ? 'on' : 'off');
-            } catch(e) {}
-        }, 1000);  // chờ 1s để backend xử lý xong
-
-    } catch(e) {
-        alert('Lỗi kết nối server!');
+// ── HÀM MỚI: cập nhật badge tóm tắt sau khi lưu ──
+function updateRepeatSummary(mode, days) {
+    const summary = document.getElementById('repeat-summary');
+    if (!summary) return;
+    const DAY_LABEL = ['T2','T3','T4','T5','T6','T7','CN'];
+    if (mode === 'once') {
+        summary.innerHTML = '<i class="fas fa-redo mr-1"></i> 1 lần';
+    } else if (mode === 'daily') {
+        summary.innerHTML = '<i class="fas fa-redo mr-1"></i> Hằng ngày';
+    } else if (mode === 'custom' && days.length > 0) {
+        const labels = days.sort((a,b)=>a-b).map(d => DAY_LABEL[d]).join(', ');
+        summary.innerHTML = '<i class="fas fa-redo mr-1"></i> ' + labels;
+    } else {
+        summary.innerHTML = '<i class="fas fa-redo mr-1"></i> Tùy chọn ngày';
     }
 }
 async function cancelEco() {

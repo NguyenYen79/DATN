@@ -2956,3 +2956,81 @@
 [2026-04-13 14:30:34.716] [24334] [HailoRT] [error] [shared_resource_manager.hpp:81] [register_resource] CHECK_SUCCESS failed with status=HAILO_OUT_OF_PHYSICAL_DEVICES(74)
 [2026-04-13 14:30:34.716] [24334] [HailoRT] [error] [vdevice.cpp:133] [create] CHECK_SUCCESS failed with status=HAILO_OUT_OF_PHYSICAL_DEVICES(74)
 [2026-04-13 14:30:34.716] [24334] [HailoRT] [error] [vdevice.cpp:567] [create] CHECK_SUCCESS failed with status=HAILO_OUT_OF_PHYSICAL_DEVICES(74)
+[2026-04-13 14:47:13.450] [25219] [HailoRT] [info] [vdevice.cpp:535] [create] Creating vdevice with params: device_count: 1, scheduling_algorithm: NONE, multi_process_service: false
+[2026-04-13 14:47:13.450] [25219] [HailoRT] [error] [vdevice.cpp:863] [create_devices] CHECK failed - Failed to create vdevice. there are not enough free devices. requested: 1, found: 0
+[2026-04-13 14:47:13.450] [25219] [HailoRT] [error] [vdevice.cpp:662] [create] CHECK_SUCCESS failed with status=HAILO_OUT_OF_PHYSICAL_DEVICES(74)
+[2026-04-13 14:47:13.451] [25219] [HailoRT] [error] [shared_resource_manager.hpp:81] [register_resource] CHECK_SUCCESS failed with status=HAILO_OUT_OF_PHYSICAL_DEVICES(74)
+[2026-04-13 14:47:13.451] [25219] [HailoRT] [error] [vdevice.cpp:133] [create] CHECK_SUCCESS failed with status=HAILO_OUT_OF_PHYSICAL_DEVICES(74)
+[2026-04-13 14:47:13.451] [25219] [HailoRT] [error] [vdevice.cpp:567] [create] CHECK_SUCCESS failed with status=HAILO_OUT_OF_PHYSICAL_DEVICES(74)
+[2026-04-13 14:49:15.247] [25365] [HailoRT] [info] [vdevice.cpp:535] [create] Creating vdevice with params: device_count: 1, scheduling_algorithm: NONE, multi_process_service: false
+[2026-04-13 14:49:15.247] [25365] [HailoRT] [error] [vdevice.cpp:863] [create_devices] CHECK failed - Failed to create vdevice. there are not enough free devices. requested: 1, found: 0
+[2026-04-13 14:49:15.247] [25365] [HailoRT] [error] [vdevice.cpp:662] [create] CHECK_SUCCESS failed with status=HAILO_OUT_OF_PHYSICAL_DEVICES(74)
+[2026-04-13 14:49:15.247] [25365] [HailoRT] [error] [shared_resource_manager.hpp:81] [register_resource] CHECK_SUCCESS failed with status=HAILO_OUT_OF_PHYSICAL_DEVICES(74)
+[2026-04-13 14:49:15.247] [25365] [HailoRT] [error] [vdevice.cpp:133] [create] CHECK_SUCCESS failed with status=HAILO_OUT_OF_PHYSICAL_DEVICES(74)
+[2026-04-13 14:49:15.247] [25365] [HailoRT] [error] [vdevice.cpp:567] [create] CHECK_SUCCESS failed with status=HAILO_OUT_OF_PHYSICAL_DEVICES(74)
+[2026-04-13 14:52:09.235] [26096] [HailoRT] [info] [vdevice.cpp:535] [create] Creating vdevice with params: device_count: 1, scheduling_algorithm: NONE, multi_process_service: false
+[2026-04-13 14:52:09.235] [26096] [HailoRT] [error] [vdevice.cpp:863] [create_devices] CHECK failed - Failed to create vdevice. there are not enough free devices. requested: 1, found: 0
+[2026-04-13 14:52:09.235] [26096] [HailoRT] [error] [vdevice.cpp:662] [create] CHECK_SUCCESS failed with status=HAILO_OUT_OF_PHYSICAL_DEVICES(74)
+[2026-04-13 14:52:09.235] [26096] [HailoRT] [error] [shared_resource_manager.hpp:81] [register_resource] CHECK_SUCCESS failed with status=HAILO_OUT_OF_PHYSICAL_DEVICES(74)
+[2026-04-13 14:52:09.235] [26096] [HailoRT] [error] [vdevice.cpp:133] [create] CHECK_SUCCESS failed with status=HAILO_OUT_OF_PHYSICAL_DEVICES(74)
+[2026-04-13 14:52:09.235] [26096] [HailoRT] [error] [vdevice.cpp:567] [create] CHECK_SUCCESS failed with status=HAILO_OUT_OF_PHYSICAL_DEVICES(74)
+[2026-04-13 15:10:53.579] [26825] [HailoRT] [info] [vdevice.cpp:535] [create] Creating vdevice with params: device_count: 1, scheduling_algorithm: NONE, multi_process_service: false
+[2026-04-13 15:10:53.579] [26825] [HailoRT] [error] [vdevice.cpp:863] [create_devices] CHECK failed - Failed to create vdevice. there are not enough free devices. requested: 1, found: 0
+[2026-04-13 15:10:53.579] [26825] [HailoRT] [error] [vdevice.cpp:662] [create] CHECK_SUCCESS failed with status=HAILO_OUT_OF_PHYSICAL_DEVICES(74)
+[2026-04-13 15:10:53.579] [26825] [HailoRT] [error] [shared_resource_manager.hpp:81] [register_resource] CHECK_SUCCESS failed with status=HAILO_OUT_OF_PHYSICAL_DEVICES(74)
+[2026-04-13 15:10:53.579] [26825] [HailoRT] [error] [vdevice.cpp:133] [create] CHECK_SUCCESS failed with status=HAILO_OUT_OF_PHYSICAL_DEVICES(74)
+[2026-04-13 15:10:53.579] [26825] [HailoRT] [error] [vdevice.cpp:567] [create] CHECK_SUCCESS failed with status=HAILO_OUT_OF_PHYSICAL_DEVICES(74)
+[2026-04-13 15:16:36.359] [27377] [HailoRT] [info] [vdevice.cpp:535] [create] Creating vdevice with params: device_count: 1, scheduling_algorithm: NONE, multi_process_service: false
+[2026-04-13 15:16:36.359] [27377] [HailoRT] [error] [vdevice.cpp:863] [create_devices] CHECK failed - Failed to create vdevice. there are not enough free devices. requested: 1, found: 0
+[2026-04-13 15:16:36.360] [27377] [HailoRT] [error] [vdevice.cpp:662] [create] CHECK_SUCCESS failed with status=HAILO_OUT_OF_PHYSICAL_DEVICES(74)
+[2026-04-13 15:16:36.360] [27377] [HailoRT] [error] [shared_resource_manager.hpp:81] [register_resource] CHECK_SUCCESS failed with status=HAILO_OUT_OF_PHYSICAL_DEVICES(74)
+[2026-04-13 15:16:36.360] [27377] [HailoRT] [error] [vdevice.cpp:133] [create] CHECK_SUCCESS failed with status=HAILO_OUT_OF_PHYSICAL_DEVICES(74)
+[2026-04-13 15:16:36.360] [27377] [HailoRT] [error] [vdevice.cpp:567] [create] CHECK_SUCCESS failed with status=HAILO_OUT_OF_PHYSICAL_DEVICES(74)
+[2026-04-13 15:37:41.052] [27988] [HailoRT] [info] [vdevice.cpp:535] [create] Creating vdevice with params: device_count: 1, scheduling_algorithm: NONE, multi_process_service: false
+[2026-04-13 15:37:41.052] [27988] [HailoRT] [error] [vdevice.cpp:863] [create_devices] CHECK failed - Failed to create vdevice. there are not enough free devices. requested: 1, found: 0
+[2026-04-13 15:37:41.052] [27988] [HailoRT] [error] [vdevice.cpp:662] [create] CHECK_SUCCESS failed with status=HAILO_OUT_OF_PHYSICAL_DEVICES(74)
+[2026-04-13 15:37:41.052] [27988] [HailoRT] [error] [shared_resource_manager.hpp:81] [register_resource] CHECK_SUCCESS failed with status=HAILO_OUT_OF_PHYSICAL_DEVICES(74)
+[2026-04-13 15:37:41.052] [27988] [HailoRT] [error] [vdevice.cpp:133] [create] CHECK_SUCCESS failed with status=HAILO_OUT_OF_PHYSICAL_DEVICES(74)
+[2026-04-13 15:37:41.052] [27988] [HailoRT] [error] [vdevice.cpp:567] [create] CHECK_SUCCESS failed with status=HAILO_OUT_OF_PHYSICAL_DEVICES(74)
+[2026-04-13 16:00:37.046] [28820] [HailoRT] [info] [vdevice.cpp:535] [create] Creating vdevice with params: device_count: 1, scheduling_algorithm: NONE, multi_process_service: false
+[2026-04-13 16:00:37.046] [28820] [HailoRT] [error] [vdevice.cpp:863] [create_devices] CHECK failed - Failed to create vdevice. there are not enough free devices. requested: 1, found: 0
+[2026-04-13 16:00:37.046] [28820] [HailoRT] [error] [vdevice.cpp:662] [create] CHECK_SUCCESS failed with status=HAILO_OUT_OF_PHYSICAL_DEVICES(74)
+[2026-04-13 16:00:37.046] [28820] [HailoRT] [error] [shared_resource_manager.hpp:81] [register_resource] CHECK_SUCCESS failed with status=HAILO_OUT_OF_PHYSICAL_DEVICES(74)
+[2026-04-13 16:00:37.046] [28820] [HailoRT] [error] [vdevice.cpp:133] [create] CHECK_SUCCESS failed with status=HAILO_OUT_OF_PHYSICAL_DEVICES(74)
+[2026-04-13 16:00:37.046] [28820] [HailoRT] [error] [vdevice.cpp:567] [create] CHECK_SUCCESS failed with status=HAILO_OUT_OF_PHYSICAL_DEVICES(74)
+[2026-04-14 09:00:30.443] [2720] [HailoRT] [info] [vdevice.cpp:535] [create] Creating vdevice with params: device_count: 1, scheduling_algorithm: NONE, multi_process_service: false
+[2026-04-14 09:00:30.445] [2720] [HailoRT] [error] [vdevice.cpp:863] [create_devices] CHECK failed - Failed to create vdevice. there are not enough free devices. requested: 1, found: 0
+[2026-04-14 09:00:30.447] [2720] [HailoRT] [error] [vdevice.cpp:662] [create] CHECK_SUCCESS failed with status=HAILO_OUT_OF_PHYSICAL_DEVICES(74)
+[2026-04-14 09:00:30.447] [2720] [HailoRT] [error] [shared_resource_manager.hpp:81] [register_resource] CHECK_SUCCESS failed with status=HAILO_OUT_OF_PHYSICAL_DEVICES(74)
+[2026-04-14 09:00:30.447] [2720] [HailoRT] [error] [vdevice.cpp:133] [create] CHECK_SUCCESS failed with status=HAILO_OUT_OF_PHYSICAL_DEVICES(74)
+[2026-04-14 09:00:30.447] [2720] [HailoRT] [error] [vdevice.cpp:567] [create] CHECK_SUCCESS failed with status=HAILO_OUT_OF_PHYSICAL_DEVICES(74)
+[2026-04-14 09:03:51.854] [3660] [HailoRT] [info] [vdevice.cpp:535] [create] Creating vdevice with params: device_count: 1, scheduling_algorithm: NONE, multi_process_service: false
+[2026-04-14 09:03:51.854] [3660] [HailoRT] [error] [vdevice.cpp:863] [create_devices] CHECK failed - Failed to create vdevice. there are not enough free devices. requested: 1, found: 0
+[2026-04-14 09:03:51.854] [3660] [HailoRT] [error] [vdevice.cpp:662] [create] CHECK_SUCCESS failed with status=HAILO_OUT_OF_PHYSICAL_DEVICES(74)
+[2026-04-14 09:03:51.854] [3660] [HailoRT] [error] [shared_resource_manager.hpp:81] [register_resource] CHECK_SUCCESS failed with status=HAILO_OUT_OF_PHYSICAL_DEVICES(74)
+[2026-04-14 09:03:51.854] [3660] [HailoRT] [error] [vdevice.cpp:133] [create] CHECK_SUCCESS failed with status=HAILO_OUT_OF_PHYSICAL_DEVICES(74)
+[2026-04-14 09:03:51.854] [3660] [HailoRT] [error] [vdevice.cpp:567] [create] CHECK_SUCCESS failed with status=HAILO_OUT_OF_PHYSICAL_DEVICES(74)
+[2026-04-14 09:25:10.024] [5624] [HailoRT] [info] [vdevice.cpp:535] [create] Creating vdevice with params: device_count: 1, scheduling_algorithm: NONE, multi_process_service: false
+[2026-04-14 09:25:10.024] [5624] [HailoRT] [error] [vdevice.cpp:863] [create_devices] CHECK failed - Failed to create vdevice. there are not enough free devices. requested: 1, found: 0
+[2026-04-14 09:25:10.024] [5624] [HailoRT] [error] [vdevice.cpp:662] [create] CHECK_SUCCESS failed with status=HAILO_OUT_OF_PHYSICAL_DEVICES(74)
+[2026-04-14 09:25:10.024] [5624] [HailoRT] [error] [shared_resource_manager.hpp:81] [register_resource] CHECK_SUCCESS failed with status=HAILO_OUT_OF_PHYSICAL_DEVICES(74)
+[2026-04-14 09:25:10.024] [5624] [HailoRT] [error] [vdevice.cpp:133] [create] CHECK_SUCCESS failed with status=HAILO_OUT_OF_PHYSICAL_DEVICES(74)
+[2026-04-14 09:25:10.024] [5624] [HailoRT] [error] [vdevice.cpp:567] [create] CHECK_SUCCESS failed with status=HAILO_OUT_OF_PHYSICAL_DEVICES(74)
+[2026-04-14 09:26:15.518] [5855] [HailoRT] [info] [vdevice.cpp:535] [create] Creating vdevice with params: device_count: 1, scheduling_algorithm: NONE, multi_process_service: false
+[2026-04-14 09:26:15.518] [5855] [HailoRT] [error] [vdevice.cpp:863] [create_devices] CHECK failed - Failed to create vdevice. there are not enough free devices. requested: 1, found: 0
+[2026-04-14 09:26:15.518] [5855] [HailoRT] [error] [vdevice.cpp:662] [create] CHECK_SUCCESS failed with status=HAILO_OUT_OF_PHYSICAL_DEVICES(74)
+[2026-04-14 09:26:15.518] [5855] [HailoRT] [error] [shared_resource_manager.hpp:81] [register_resource] CHECK_SUCCESS failed with status=HAILO_OUT_OF_PHYSICAL_DEVICES(74)
+[2026-04-14 09:26:15.518] [5855] [HailoRT] [error] [vdevice.cpp:133] [create] CHECK_SUCCESS failed with status=HAILO_OUT_OF_PHYSICAL_DEVICES(74)
+[2026-04-14 09:26:15.518] [5855] [HailoRT] [error] [vdevice.cpp:567] [create] CHECK_SUCCESS failed with status=HAILO_OUT_OF_PHYSICAL_DEVICES(74)
+[2026-04-14 09:30:39.888] [6409] [HailoRT] [info] [vdevice.cpp:535] [create] Creating vdevice with params: device_count: 1, scheduling_algorithm: NONE, multi_process_service: false
+[2026-04-14 09:30:39.888] [6409] [HailoRT] [error] [vdevice.cpp:863] [create_devices] CHECK failed - Failed to create vdevice. there are not enough free devices. requested: 1, found: 0
+[2026-04-14 09:30:39.888] [6409] [HailoRT] [error] [vdevice.cpp:662] [create] CHECK_SUCCESS failed with status=HAILO_OUT_OF_PHYSICAL_DEVICES(74)
+[2026-04-14 09:30:39.889] [6409] [HailoRT] [error] [shared_resource_manager.hpp:81] [register_resource] CHECK_SUCCESS failed with status=HAILO_OUT_OF_PHYSICAL_DEVICES(74)
+[2026-04-14 09:30:39.889] [6409] [HailoRT] [error] [vdevice.cpp:133] [create] CHECK_SUCCESS failed with status=HAILO_OUT_OF_PHYSICAL_DEVICES(74)
+[2026-04-14 09:30:39.889] [6409] [HailoRT] [error] [vdevice.cpp:567] [create] CHECK_SUCCESS failed with status=HAILO_OUT_OF_PHYSICAL_DEVICES(74)
+[2026-04-14 09:37:03.534] [7220] [HailoRT] [info] [vdevice.cpp:535] [create] Creating vdevice with params: device_count: 1, scheduling_algorithm: NONE, multi_process_service: false
+[2026-04-14 09:37:03.534] [7220] [HailoRT] [error] [vdevice.cpp:863] [create_devices] CHECK failed - Failed to create vdevice. there are not enough free devices. requested: 1, found: 0
+[2026-04-14 09:37:03.534] [7220] [HailoRT] [error] [vdevice.cpp:662] [create] CHECK_SUCCESS failed with status=HAILO_OUT_OF_PHYSICAL_DEVICES(74)
+[2026-04-14 09:37:03.534] [7220] [HailoRT] [error] [shared_resource_manager.hpp:81] [register_resource] CHECK_SUCCESS failed with status=HAILO_OUT_OF_PHYSICAL_DEVICES(74)
+[2026-04-14 09:37:03.534] [7220] [HailoRT] [error] [vdevice.cpp:133] [create] CHECK_SUCCESS failed with status=HAILO_OUT_OF_PHYSICAL_DEVICES(74)
+[2026-04-14 09:37:03.534] [7220] [HailoRT] [error] [vdevice.cpp:567] [create] CHECK_SUCCESS failed with status=HAILO_OUT_OF_PHYSICAL_DEVICES(74)

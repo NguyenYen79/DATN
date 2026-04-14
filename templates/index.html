@@ -1607,7 +1607,23 @@
         msg.style.display = 'flex';
         setTimeout(() => { msg.style.display = 'none'; }, 1000);
 
-        updateFanStatusBar('turning_on'); // ← thêm dòng này
+        updateFanStatusBar('turning_on');
+
+        // ── ĐỌC CHẾ ĐỘ LẶP LẠI ──
+        const repeatMode = document.querySelector('input[name="repeat-mode"]:checked')?.value || 'once';
+
+        // ── ĐỌC CÁC NGÀY ĐÃ CHỌN (chỉ khi custom) ──
+        const DAY_MAP = { mon:0, tue:1, wed:2, thu:3, fri:4, sat:5, sun:6 };
+        const selectedDays = [];
+        if (repeatMode === 'custom') {
+            document.querySelectorAll('#repeat-days input[type="checkbox"]:checked').forEach(cb => {
+                if (DAY_MAP[cb.value] !== undefined) selectedDays.push(DAY_MAP[cb.value]);
+            });
+        }
+
+        // ── MAP 'daily' → 'weekly' cho backend ──
+        // Frontend dùng 'daily', backend dùng 'weekly' (chạy tất cả các ngày)
+        const repeatBackend = repeatMode === 'daily' ? 'weekly' : repeatMode;
 
         fetch('/eco/save', {
             method: 'POST',
@@ -1619,12 +1635,33 @@
                 stop_h   : document.getElementById('e-h').value,
                 stop_m   : document.getElementById('e-m').value,
                 stop_ap  : document.getElementById('e-ap').value,
-                rpm      : ecoSpeed
+                rpm      : ecoSpeed,
+                // ── THÊM 2 FIELD MỚI ──
+                repeat   : repeatBackend,
+                days     : selectedDays
             })
         }).then(r => r.json()).then(data => {
-            // Sau khi server phản hồi mới cập nhật đúng trạng thái
-            updateFanStatusBar('on');  // ← thêm dòng này
+            updateFanStatusBar('on');
+            // Cập nhật summary badge trong menu
+            updateRepeatSummary(repeatMode, selectedDays);
         }).catch(e => {});
+    }
+
+    // ── HÀM MỚI: cập nhật badge tóm tắt sau khi lưu ──
+    function updateRepeatSummary(mode, days) {
+        const summary = document.getElementById('repeat-summary');
+        if (!summary) return;
+        const DAY_LABEL = ['T2','T3','T4','T5','T6','T7','CN'];
+        if (mode === 'once') {
+            summary.innerHTML = '<i class="fas fa-redo mr-1"></i> 1 lần';
+        } else if (mode === 'daily') {
+            summary.innerHTML = '<i class="fas fa-redo mr-1"></i> Hằng ngày';
+        } else if (mode === 'custom' && days.length > 0) {
+            const labels = days.sort((a,b)=>a-b).map(d => DAY_LABEL[d]).join(', ');
+            summary.innerHTML = '<i class="fas fa-redo mr-1"></i> ' + labels;
+        } else {
+            summary.innerHTML = '<i class="fas fa-redo mr-1"></i> Tùy chọn ngày';
+        }
     }
 
     // ── POLL SỐ NGƯỜI ─────────────────────────────────────
